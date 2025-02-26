@@ -146,24 +146,17 @@ int main(int ac, char **av)
 	}
 
 	// Calculate the number of points in each axis
-	unsigned int npX = (unsigned int)(sizeX / deltaH); // Number of points in X axis
+	unsigned int npX = (unsigned int)(sizeX / deltaH);
 	unsigned int npY = (unsigned int)(sizeY / deltaH);
 	unsigned int npZ = (unsigned int)(sizeZ / deltaH);
 
-	// Calculate number of points for each MPI process
-	unsigned int npXp = npX / size;
-	unsigned int npYp = npY / size;
-	unsigned int npZp = npZ / size;
+	/** The three-dimensional space will be divided into a number of slices across the X axis
+	 * matching the number of MPI processes, and which are made up of a set of points. */
+	unsigned int points_per_slice = npX / size;
 
-	// Calculate the remaining points
-	unsigned int npXr = npX % size;
-	unsigned int npYr = npY % size;
-	unsigned int npZr = npZ % size;
-
-	if (myrank == 0) // TODO: Debugging lines
-		printf("points per division: (x = %u, y = %u, z = %u)\n", npX, npY, npZ);
-
-	/** Simplest approach for a load balancing algorithm:
+	/** Some slices might have more points than others if npX cannot be exactly divided by 
+	 * the number of MPI processes, so we will implement the simplest approach for a load 
+	 * balancing algorithm:
 	 *  	Distribute the remaining points among the first MPI processes.
 	 *  	Assuming equal workload for each point and equal hardware resources, this would
 	 *  	be the fairest algorithm.
@@ -171,31 +164,11 @@ int main(int ac, char **av)
 	 *  Obviously, those conditions are not frequently met, so this algorithm is not
 	 *  the best one, but it will be enough for this first implementation.
 	 */
+	unsigned int remaining_points = npX % size;
 
-	// Distribute the remaining points among the first MPI processes
-	npX = npXp;
-	npY = npYp;
-	npZ = npZp;
-
-	if (myrank < npXr)
-		npX++;
-	if (myrank < npYr)
-		npY++;
-	if (myrank < npZr)
-		npZ++;
-
-	if (myrank == 0) // TODO: Debugging lines
-	{
-		printf("points per process: %u\n", npXp);
-		printf("remaining points: %u\n", npXr);
-	}
-	MPI_Barrier(MPI_COMM_WORLD); // TODO: Delete this line
-	printf("I am the process %d and I will compute the following points: (x = %u, y = %u, z = %u)\n", myrank, npX, npY, npZ);
-
-	/*{ // TODO: Debugging lines
-		MPI_Finalize();
-		return EXIT_SUCCESS;
-	}*/
+	// Calculate the number of points for each MPI process. Processes with myrank < remaining_points will have one more point
+	if (myrank < remaining_points)
+		points_per_slice++;
 
 	// Allocating memory for the tri-dimensional space
 	u0 = (double ***)malloc(npZ * sizeof(double **));

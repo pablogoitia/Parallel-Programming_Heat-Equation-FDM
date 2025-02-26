@@ -14,8 +14,6 @@
 #include <math.h>
 #include <mpi.h>
 
-#define STABILITY 1.0f / sqrt(3.0f)
-
 unsigned int mdf_heat(double ***__restrict__ u0,
 					  double ***__restrict__ u1,
 					  const unsigned int npX,
@@ -24,21 +22,27 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					  const double deltaH,
 					  const double deltaT,
 					  const double inErr,
-					  const double boundaries)
+					  const double boundaries,
+					  const unsigned int first_point,
+					  const unsigned int last_point)
 {
 
 	register double alpha = deltaT / (deltaH * deltaH);
 	register int continued = 1;
 	register unsigned int steps = 0;
 
+	// Loop indexes
+	unsigned int i, j, k;
+	unsigned int points_per_slice = last_point - first_point + 1;
+
 	while (continued)
 	{
 		steps++;
-		for (unsigned int i = 0; i < npZ; i++)
+		for (i = 0; i < npZ; i++)
 		{
-			for (unsigned int j = 0; j < npY; j++)
+			for (j = 0; j < npY; j++)
 			{
-				for (unsigned int k = 0; k < npX; k++)
+				for (k = first_point; k < last_point; k++)
 				{
 					register double left = boundaries;
 					register double right = boundaries;
@@ -46,17 +50,27 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					register double down = boundaries;
 					register double top = boundaries;
 					register double bottom = boundaries;
-
-					// TODO: Manage divisions
+					
+					// k point is inside the X axis, and not in the borders
 					if ((k > 0) && (k < (npX - 1)))
 					{
+						// k needs to read information from the left slide last point
+						// [...]
+						// k needs to read information from the right slide first point
+						// [...]
+
+						// Pre-existing code
 						left = u0[i][j][k - 1];
 						right = u0[i][j][k + 1];
 					}
+					// k is at the left border of the X axis (k = 0)
 					else if (k == 0)
+						// left = boundaries;
 						right = u0[i][j][k + 1];
+					// k is at the right border of the X axis (k = npX - 1)
 					else
 						left = u0[i][j][k - 1];
+						// right = boundaries;
 
 					if ((j > 0) && (j < (npY - 1)))
 					{
@@ -78,7 +92,10 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					else
 						top = u0[i - 1][j][k];
 
-					u1[i][j][k] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[i][j][k])) + u0[i][j][k];
+					// u1[i][j][k] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[i][j][k])) + u0[i][j][k];
+					/** Calculates a provisional value for u1[i][j][k] until left and right values are received 
+					 * from the neighbour MPI processes. */
+					u1[i][j][k] = alpha * (top + bottom + up + down - (6.0f * u0[i][j][k])) + u0[i][j][k];
 					// printf("u1[%d][%d][%d] = %f\n", i, j, k, u1[i][j][k]);
 				}
 			}
@@ -90,11 +107,11 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 		double err = 0.0f;
 		double maxErr = 0.0f;
-		for (unsigned int i = 0; i < npZ; i++)
+		for (i = 0; i < npZ; i++)
 		{
-			for (unsigned int j = 0; j < npY; j++)
+			for (j = 0; j < npY; j++)
 			{
-				for (unsigned int k = 0; k < npX; k++)
+				for (k = 0; k < npX; k++)
 				{
 					err = fabs(u0[i][j][k] - boundaries);
 					if (err > inErr)
@@ -166,46 +183,58 @@ int main(int ac, char **av)
 	 */
 	unsigned int remaining_points = npX % size;
 
-	// Calculate the number of points for each MPI process. Processes with myrank < remaining_points will have one more point
+	/** Calculate the number of points for each MPI process. Processes with 
+	 * myrank < remaining_points will have one more point. */
 	if (myrank < remaining_points)
 		points_per_slice++;
 
+	/** Calculate the first and last point in the slice for each MPI process, 
+	 * considering that some processes will have one more point. */
+	unsigned int first_point = 0;
+	for (int i = 0; i < myrank; i++)
+		first_point += (i < remaining_points) ? (points_per_slice + 1) : points_per_slice;
+	unsigned int last_point = first_point + points_per_slice - 1;
+
 	// Allocating memory for the tri-dimensional space
+	// Memory allocation for Z axis
 	u0 = (double ***)malloc(npZ * sizeof(double **));
 	u1 = (double ***)malloc(npZ * sizeof(double **));
 
+	// Memory allocation for Y axis
 	for (unsigned int i = 0; i < npZ; i++)
 	{
 		u0[i] = (double **)malloc(npY * sizeof(double *));
 		u1[i] = (double **)malloc(npY * sizeof(double *));
 	}
 
+	/** Memory allocation for X axis.
+	 * In this case, we will allocate memory for the points in each slice, that is,
+	 * the value of points_per_slice.
+	 * We will also allocate memory for the two contiguous points in the X axis, because
+	 * the algorithm will need to access the values of that points in the neighbour slices.
+	 */
 	for (unsigned int i = 0; i < npZ; i++)
 	{
 		for (unsigned int j = 0; j < npY; j++)
 		{
-			double *aux0 = (double *)malloc(npX * sizeof(double));
-			double *aux1 = (double *)malloc(npX * sizeof(double));
+			double *aux0 = (double *)malloc(points_per_slice * sizeof(double));
+			double *aux1 = (double *)malloc(points_per_slice * sizeof(double));
 			// initial condition - zero in all points
-			memset(aux0, 0x01, npX * sizeof(double));
-			memset(aux1, 0x02, npX * sizeof(double));
+			memset(aux0, 0x01, (points_per_slice + 2) * sizeof(double));
+			memset(aux1, 0x02, (points_per_slice + 2) * sizeof(double));
 			u0[i][j] = aux0;
 			u1[i][j] = aux1;
 		}
 	}
 
 	// Each MPI process will compute its own points with the finite difference method
-	unsigned int steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f);
+	unsigned int steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point);
 	unsigned int total_steps;
 
 	// Collect the number of steps from all MPI processes and sum them
 	MPI_Reduce(&steps, &total_steps, 1, MPI_UNSIGNED, MPI_SUM, 0, MPI_COMM_WORLD);
 
 	fprintf(stdout, "Done! in %u steps\n", total_steps);
-
-	/*********************************
-	** DO NOT TOUCH THE LINES BELOW **
-	*********************************/
 
 	// Free memory
 	for (unsigned int i = 0; i < npZ; i++)

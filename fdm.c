@@ -279,7 +279,8 @@ int main(int ac, char **av)
 	// Collect the number of steps from all MPI processes and sum them
 	MPI_Reduce(&steps, &total_steps, 1, MPI_UNSIGNED, MPI_SUM, 0, MPI_COMM_WORLD);
 
-	fprintf(stdout, "Done! in %u steps\n", total_steps);
+	if (myrank == 0)
+		fprintf(stdout, "Done! in %u steps\n", total_steps);
 
 	// Free memory
 	for (unsigned int i = 0; i < npZ; i++)

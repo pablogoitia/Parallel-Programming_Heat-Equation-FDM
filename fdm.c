@@ -53,7 +53,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 	// Buffer for MPI communication
 	double *buffer = (double *)malloc(npY * npZ * sizeof(double));
-	
+
 	while (continued)
 	{
 		steps++;
@@ -109,7 +109,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		}
 
 		position = 0;
-		
+
 		if (myrank < (size - 1))
 		{
 			// Send the content of the last point of the slice to the right neighbour
@@ -130,7 +130,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		}
 
 		position = 0;
-		
+
 		if (myrank < (size - 1))
 		{
 			// Receive the content of the last point of the slice from the right neighbour
@@ -139,7 +139,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
 		}
 
-		i_internal = 1;	// Internal index for the slice, which also avoids the 'left' point
+		i_internal = 1; // Internal index for the slice, which also avoids the 'left' point
 
 		// Calculate the definitive values for the points in the slice, including 'left' and 'right' points
 		for (i = first_point; i <= last_point; i++)
@@ -182,13 +182,13 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 				{
 					err = fabs(u0[i][j][k] - boundaries);
 					if (err > inErr)
-                      	maxErr = err;
+						maxErr = err;
 					else
 						continued = 0;
 				}
 			}
 		}
-		
+
 		// if (myrank == 0)
 		// 	printf ("err = %.4g > inErr = %.4g\n", err, inErr);
 
@@ -241,8 +241,8 @@ int main(int ac, char **av)
 	 * matching the number of MPI processes, and which are made up of a set of points. */
 	unsigned int points_per_slice = npX / size;
 
-	/** Some slices might have more points than others if npX cannot be exactly divided by 
-	 * the number of MPI processes, so we will implement the simplest approach for a load 
+	/** Some slices might have more points than others if npX cannot be exactly divided by
+	 * the number of MPI processes, so we will implement the simplest approach for a load
 	 * balancing algorithm:
 	 *  	Distribute the remaining points among the first MPI processes.
 	 *  	Assuming equal workload for each point and equal hardware resources, this would
@@ -253,12 +253,12 @@ int main(int ac, char **av)
 	 */
 	unsigned int remaining_points = npX % size;
 
-	/** Calculate the number of points for each MPI process. Processes with 
+	/** Calculate the number of points for each MPI process. Processes with
 	 * myrank < remaining_points will have one more point. */
 	if (myrank < remaining_points)
 		points_per_slice++;
 
-	/** Calculate the first and last point in the slice for each MPI process, 
+	/** Calculate the first and last point in the slice for each MPI process,
 	 * considering that some processes will have one more point. */
 	unsigned int first_point = 0;
 	for (int i = 0; i < myrank; i++)

@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 199309L
 /****************************************************************/
 /* Nombre:                                                      */
 /* Práctica:                                                    */
@@ -13,6 +14,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #define STABILITY 1.0f/sqrt(3.0f)
 
 
@@ -111,7 +113,7 @@ void mdf_heat(double ***  __restrict__ u0,
                   }
                 }
               }
-              printf ("err = %.4g > inErr = %.4g\n", err, inErr);
+              // printf ("err = %.4g > inErr = %.4g\n", err, inErr);
               // sleep(1);
     }
   
@@ -160,7 +162,14 @@ int main (int ac, char **av){
   }
 
   
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
+  
   mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f);
+  
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  double execution_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+  printf("Execution time: %.3f seconds\n", execution_time);
   //mdf_print(u1,  npX, npY, npZ);
   
   //Free memory

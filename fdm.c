@@ -1,7 +1,7 @@
 /*****************************************************************
 /* Author: Pablo Goitia <pablo.goitia@alumnos.unican.es>
 /* Project: Finite-Difference Approximation to the Heat Equation
-/* Date: Feb-2025
+/* Date: Mar-2025
 /*
 /* Usage: ./fdm [deltaH]
 /*****************************************************************/

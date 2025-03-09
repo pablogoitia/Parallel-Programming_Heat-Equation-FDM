@@ -53,13 +53,13 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 	// Buffer for MPI communication
 	double *buffer = (double *)malloc(npY * npZ * sizeof(double));
-
+	
 	while (continued)
 	{
 		steps++;
 
 		// Calculate the provisional values for the points in the slice, excluding 'left' and 'right' points
-		for (i = 1; i <= npX; i++)	// TODO: Check if it is correct
+		for (i = 1; i <= points_per_slice; i++)
 		{
 			for (j = 0; j < npY; j++)
 			{
@@ -97,21 +97,24 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		}
 
 		// Exchange first and last point values with neighbour MPI processes
+		position = 0;
 
 		if (myrank > 0)
 		{
 			// Send the content of the first point of the slice to the left neighbour
 			for (i = 0; i < npY; i++)
-				MPI_Pack(u0[0][i], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
+				MPI_Pack(&u0[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
 
 			MPI_Send(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD);
 		}
+
+		position = 0;
 		
 		if (myrank < (size - 1))
 		{
 			// Send the content of the last point of the slice to the right neighbour
 			for (i = 0; i < npY; i++)
-				MPI_Pack(u0[points_per_slice][i], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
+				MPI_Pack(&u0[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
 
 			MPI_Send(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD);
 		}
@@ -123,21 +126,23 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			// Receive the content of the first point of the slice from the left neighbour
 			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &status);
 			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, u0[0][i], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
+				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[0][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
 		}
+
+		position = 0;
 		
 		if (myrank < (size - 1))
 		{
 			// Receive the content of the last point of the slice from the right neighbour
 			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &status);
 			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, u0[points_per_slice][i], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
+				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
 		}
 
 		i_internal = 1;	// Internal index for the slice, which also avoids the 'left' point
 
 		// Calculate the definitive values for the points in the slice, including 'left' and 'right' points
-		for (i = first_point; i < last_point; i++)
+		for (i = first_point; i <= last_point; i++)
 		{
 			for (j = 0; j < npY; j++)
 			{
@@ -152,13 +157,12 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 						left = u0[i_internal - 1][j][k];
 						right = u0[i_internal + 1][j][k];
 					}
-					else if (i_internal == 0)
+					else if (i == 0)
 						right = u0[i_internal + 1][j][k];
 					else
 						left = u0[i_internal - 1][j][k];
 
 					u1[i_internal][j][k] += alpha * (left + right);
-					// printf("u1[%d][%d][%d] = %.4f\n", i, j, k, u1[i][j][k]);
 				}
 			}
 			i_internal++;
@@ -170,11 +174,11 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 		double err = 0.0f;
 		double maxErr = 0.0f;
-		for (i = 1; i <= npX; i++)
+		for (i = 1; i <= points_per_slice; i++)
 		{
 			for (j = 0; j < npY; j++)
 			{
-				for (k = 0; k < points_per_slice; k++)
+				for (k = 0; k < npZ; k++)
 				{
 					err = fabs(u0[i][j][k] - boundaries);
 					if (err > inErr)
@@ -184,10 +188,13 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 				}
 			}
 		}
-		printf ("Process %d; err = %.4g > inErr = %.4g\n", myrank, err, inErr);
+		
+		// if (myrank == 0)
+		// 	printf ("err = %.4g > inErr = %.4g\n", err, inErr);
 
 		// Use MPI_LAND to check if any process has set 'continued' to 0
 		MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+		/** Better idea: to signal the other processes when a 0 has been found in one of them. */
 	}
 
 	return steps;
@@ -258,14 +265,16 @@ int main(int ac, char **av)
 		first_point += (i < remaining_points) ? (points_per_slice + 1) : points_per_slice;
 	unsigned int last_point = first_point + points_per_slice - 1;
 
+	// TODO: Idea:
+	// To avoid the subsequent execution for processes with 'points_per_slice' = 0, i.e. when num_procs > npX.
+
 	// Allocating memory for the tri-dimensional space
 	// Memory allocation for X axis
 	u0 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
 	u1 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
 
 	// Processes print the number of points in each axis
-	printf("I am process %d of %d. p(%u, %u, %u). points_per_slice=%d\n", myrank, size, npX, npY, npZ, points_per_slice);
-	printf("I am process %d of %d. first_point=%d, last_point=%d\n", myrank, size, first_point, last_point);
+	printf("I am process %d of %d. p(%u, %u, %u). points_per_slice=%d. first_point=%d, last_point=%d\n", myrank, size, npX, npY, npZ, points_per_slice, first_point, last_point);
 
 	// Memory allocation for Y axis
 	for (unsigned int i = 0; i < (points_per_slice + 2); i++)

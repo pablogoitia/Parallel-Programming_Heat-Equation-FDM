@@ -28,6 +28,16 @@ void mdf_heat(double ***  __restrict__ u0,
     register double alpha = deltaT / (deltaH * deltaH);
     register int continued = 1;
     register unsigned int steps = 0;
+
+    // Print the y-z slice of the first point of the slice
+    // for (unsigned int i = 0; i < npY; i++)
+    // {
+    //   for (unsigned int j = 0; j < npZ; j++)
+    //     printf("%.4f ", u0[j][i][0]);
+    //   printf("\n");
+    // }
+    // printf("\n");
+
     while (continued){
       steps++;
               for (unsigned int i = 0; i < npZ; i++){
@@ -66,6 +76,23 @@ void mdf_heat(double ***  __restrict__ u0,
                   }
                 }
               } 
+
+              // Print the y-z slice of the first point of the slice
+              // if (steps == 3)
+              // {
+              //   for (unsigned int k = 0; k < npX; k++)
+              //   {
+              //     printf("Slice #%d, step %d\n", k, steps);
+              //     for (unsigned int i = 0; i < npZ; i++)
+              //     {
+              //       for (unsigned int j = 0; j < npY; j++)
+              //         printf("%.4f ", u1[i][j][k]);
+              //       printf("\n");
+              //     }
+              //     printf("\n");
+              //   }
+              //   sleep(100);
+              // }
               
               double ***ptr = u0;
               u0 = u1;
@@ -78,16 +105,14 @@ void mdf_heat(double ***  __restrict__ u0,
                   for (unsigned int k = 0; k < npX; k++){
                     err = fabs(u0[i][j][k] - boundaries);
                     if (err > inErr)
-                    {
-                      if (err != maxErr)
-                         printf ("err = %.17g > inErr = %.15f\n", err, inErr);
                       maxErr = err;
-                    }
                     else
                       continued = 0;
                   }
                 }
               }
+              printf ("err = %.4g > inErr = %.4g\n", err, inErr);
+              // sleep(1);
     }
   
     fprintf(stdout, "Done! in %u steps\n", steps);

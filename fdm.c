@@ -45,6 +45,9 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 	register double top;
 	register double bottom;
 
+	double ***ptr;
+	double err, maxErr;
+
 	// MPI Status variable
 	MPI_Status status;
 
@@ -97,10 +100,11 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		}
 
 		// Exchange first and last point values with neighbour MPI processes
-		position = 0;
 
 		if (myrank > 0)
 		{
+			position = 0;
+			
 			// Send the content of the first point of the slice to the left neighbour
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u0[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
@@ -108,10 +112,10 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			MPI_Send(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD);
 		}
 
-		position = 0;
-
 		if (myrank < (size - 1))
 		{
+			position = 0;
+	
 			// Send the content of the last point of the slice to the right neighbour
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u0[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
@@ -119,20 +123,20 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			MPI_Send(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD);
 		}
 
-		position = 0;
-
 		if (myrank > 0)
 		{
+			position = 0;
+	
 			// Receive the content of the first point of the slice from the left neighbour
 			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &status);
 			for (i = 0; i < npY; i++)
 				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[0][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
 		}
 
-		position = 0;
-
 		if (myrank < (size - 1))
 		{
+			position = 0;
+	
 			// Receive the content of the last point of the slice from the right neighbour
 			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &status);
 			for (i = 0; i < npY; i++)
@@ -168,12 +172,14 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			i_internal++;
 		}
 
-		double ***ptr = u0;
+		// Swap the pointers (the next instant of time is now the current time)
+		ptr = u0;
 		u0 = u1;
 		u1 = ptr;
 
-		double err = 0.0f;
-		double maxErr = 0.0f;
+		// Calculate the error
+		err = 0.0f;
+		maxErr = 0.0f;
 		for (i = 1; i <= points_per_slice; i++)
 		{
 			for (j = 0; j < npY; j++)

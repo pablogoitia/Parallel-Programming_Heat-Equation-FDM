@@ -198,10 +198,23 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		// if (myrank == 0)
 		// 	printf ("err = %.4g > inErr = %.4g\n", err, inErr);
 
-		// Use MPI_LAND to check if any process has set 'continued' to 0
-		MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-		/** Better idea: to signal the other processes when a 0 has been found in one of them. */
+		// Check if any message indicating completion was found
+		int flag;
+		MPI_Status probe_status;
+		MPI_Message msg;
+		MPI_Improbe(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &flag, &msg, &probe_status);
+		if (flag)
+		{
+			// Discard the message from the source
+			MPI_Mrecv(&continued, 1, MPI_INT, &msg, &status);
+
+			continued = 0;
+		}
 	}
+
+	for (int i = 0; i < size; i++)
+		if (i != myrank)
+			MPI_Send(&continued, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
 
 	return steps;
 }
@@ -309,8 +322,10 @@ int main(int ac, char **av)
 		}
 	}
 
-	// Each MPI process will compute its own points with the finite difference method
+	// Each MPI process will compute its assigned points with the finite difference method
 	unsigned int steps, max_steps;
+	double start_time = MPI_Wtime();
+
 	steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point, myrank, size);
 
 	// Collect the number of steps from all MPI processes and get the maximum value
@@ -318,6 +333,15 @@ int main(int ac, char **av)
 
 	if (myrank == 0)
 		fprintf(stdout, "Done! in %u steps\n", max_steps);
+
+	double end_time = MPI_Wtime();
+	double execution_time = end_time - start_time;
+
+	// Get max execution time across all processes
+	double max_time;
+	MPI_Reduce(&execution_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+	if (myrank == 0)
+		printf("Total execution time: %f seconds\n", max_time);
 
 	// Free memory
 	for (unsigned int i = 0; i < (points_per_slice + 2); i++)

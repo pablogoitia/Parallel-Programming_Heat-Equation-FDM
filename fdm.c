@@ -30,7 +30,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 {
 
 	register double alpha = deltaT / (deltaH * deltaH);
-	register int continued = 1;
+	int continued = 1;
 	register unsigned int steps = 0;
 
 	// Loop indexes
@@ -59,7 +59,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		steps++;
 
 		// Calculate the provisional values for the points in the slice, excluding 'left' and 'right' points
-		for (i = 0; i < points_per_slice; i++)	// TODO: Check if it is correct
+		for (i = 1; i <= npX; i++)	// TODO: Check if it is correct
 		{
 			for (j = 0; j < npY; j++)
 			{
@@ -170,7 +170,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 		double err = 0.0f;
 		double maxErr = 0.0f;
-		for (i = 0; i < npX; i++)
+		for (i = 1; i <= npX; i++)
 		{
 			for (j = 0; j < npY; j++)
 			{
@@ -268,7 +268,7 @@ int main(int ac, char **av)
 	printf("I am process %d of %d. first_point=%d, last_point=%d\n", myrank, size, first_point, last_point);
 
 	// Memory allocation for Y axis
-	for (unsigned int i = 0; i < npZ; i++)
+	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
 	{
 		u0[i] = (double **)malloc(npY * sizeof(double *));
 		u1[i] = (double **)malloc(npY * sizeof(double *));
@@ -287,22 +287,22 @@ int main(int ac, char **av)
 			double *aux0 = (double *)malloc(npZ * sizeof(double));
 			double *aux1 = (double *)malloc(npZ * sizeof(double));
 			// initial condition - zero in all points
-			memset(aux0, 0x01, (points_per_slice + 2) * sizeof(double));
-			memset(aux1, 0x02, (points_per_slice + 2) * sizeof(double));
+			memset(aux0, 0x01, npZ * sizeof(double));
+			memset(aux1, 0x02, npZ * sizeof(double));
 			u0[i][j] = aux0;
 			u1[i][j] = aux1;
 		}
 	}
 
 	// Each MPI process will compute its own points with the finite difference method
-	unsigned int steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point, myrank, size);
-	unsigned int total_steps;
+	unsigned int steps, max_steps;
+	steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point, myrank, size);
 
 	// Collect the number of steps from all MPI processes and get the maximum value
-	MPI_Reduce(&steps, &total_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&steps, &max_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
 
 	if (myrank == 0)
-		fprintf(stdout, "Done! in %u steps\n", total_steps);
+		fprintf(stdout, "Done! in %u steps\n", max_steps);
 
 	// Free memory
 	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
@@ -314,7 +314,7 @@ int main(int ac, char **av)
 		}
 	}
 
-	for (unsigned int i = 0; i < npZ; i++)
+	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
 	{
 		free(u0[i]);
 		free(u1[i]);

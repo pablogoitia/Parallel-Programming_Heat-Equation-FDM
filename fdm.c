@@ -13,6 +13,7 @@
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 
 unsigned int mdf_heat(double ***__restrict__ u0,
 					  double ***__restrict__ u1,
@@ -104,7 +105,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		if (myrank > 0)
 		{
 			position = 0;
-			
+
 			// Send the content of the first point of the slice to the left neighbour
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u0[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
@@ -115,7 +116,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		if (myrank < (size - 1))
 		{
 			position = 0;
-	
+
 			// Send the content of the last point of the slice to the right neighbour
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u0[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
@@ -126,7 +127,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		if (myrank > 0)
 		{
 			position = 0;
-	
+
 			// Receive the content of the first point of the slice from the left neighbour
 			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &status);
 			for (i = 0; i < npY; i++)
@@ -136,7 +137,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		if (myrank < (size - 1))
 		{
 			position = 0;
-	
+
 			// Receive the content of the last point of the slice from the right neighbour
 			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &status);
 			for (i = 0; i < npY; i++)

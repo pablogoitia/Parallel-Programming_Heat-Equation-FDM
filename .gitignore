@@ -1,5 +1,4 @@
 /fdm
 /fdm_sec
-/fdm_allreduce.c
-/fdm_allreduce
+/discarded
 /.vscode

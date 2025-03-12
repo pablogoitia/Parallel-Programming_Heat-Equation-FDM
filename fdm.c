@@ -26,7 +26,8 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					  const unsigned int first_point,
 					  const unsigned int last_point,
 					  const int myrank,
-					  const int size)
+					  const int size,
+					  MPI_Comm compute_comm)
 {
 
 	register double alpha = deltaT / (deltaH * deltaH);
@@ -121,16 +122,16 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 			// Send the content of the first point of the slice to the left neighbour
 			for (i = 0; i < npY; i++)
-				MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
+				MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
 
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &request_s_left);
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_s_left);
 
 			position = 0;
 
 			// Receive the content of the first point of the slice from the left neighbour
-			MPI_Irecv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &request_r_left);
+			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &status);
 			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
+				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, compute_comm);
 		}
 
 		if (myrank < (size - 1))
@@ -139,30 +140,24 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 			// Send the content of the last point of the slice to the right neighbour
 			for (i = 0; i < npY; i++)
-				MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
+				MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
 
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &request_s_right);
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_s_right);
 
 			position = 0;
 
 			// Receive the content of the last point of the slice from the right neighbour
-			MPI_Irecv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &request_r_right);
+			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &status);
 			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
+				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, compute_comm);
 		}
 
 		// Check if the messages have been sent and received
 		if (myrank > 0)
-		{
 			MPI_Wait(&request_s_left, &status);
-			MPI_Wait(&request_r_left, &status);
-		}
 
 		if (myrank < (size - 1))
-		{
 			MPI_Wait(&request_s_right, &status);
-			MPI_Wait(&request_r_right, &status);
-		}
 
 		// Swap the pointers (the next instant of time is now the current time)
 		ptr = u0;
@@ -187,11 +182,8 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			}
 		}
 
-		// if (myrank == 0)
-		// 	printf ("err = %.4g > inErr = %.4g\n", err, inErr);
-
 		// Use MPI_LAND to check if any process has set 'continued' to 0
-		MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+		MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
 	}
 
 	return steps;
@@ -199,150 +191,175 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 int main(int ac, char **av)
 {
+	// Data structures
 	double ***u0;
 	double ***u1;
 
+	// Loop indexes
+	unsigned int i, j;
+
+	// Simulation parameters
 	double deltaT = 0.01;
 	double deltaH = 0.005f;
 	double sizeX = 1.0f;
 	double sizeY = 1.0f;
 	double sizeZ = 1.0f;
 
+	double *aux0, *aux1;
+
+	unsigned int npX, npY, npZ;
+
 	// MPI variables
-	int myrank, size;
+	int my_global_rank;
 	MPI_Status status;
+
+	// Subcommunicator for the MPI processes that will compute the points
+	MPI_Comm compute_comm;
+	int myrank, size;
+	int is_computing_proc = 0;
+
+	// Variables for the MPI processes
+	unsigned int points_per_slice, remaining_points;
+	unsigned int first_point, last_point;
+
+	// Variables for results
+	unsigned int steps, max_steps;
+	double start_time, end_time, execution_time, max_time;
 
 	// Start MPI communication
 	MPI_Init(&ac, &av);
-	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	MPI_Comm_rank(MPI_COMM_WORLD, &my_global_rank);
 
-	/** Input processing (common for all MPI processes)
-	 * 	- The deltaH parameter must be in the range (0.0, 1.0)
-	 * 	- The deltaH parameter must be a divisor of the number of processes
-	 */
+	// Input processing (common for all MPI processes)
 	if (ac > 1)
 	{
 		deltaH = atof(av[1]);
-		if (deltaH <= 0.0f || deltaH >= 1.0f || (int)(sizeX / deltaH) % size != 0)
+		if (deltaH <= 0.0f || deltaH >= 1.0f)
 		{
-			if (myrank == 0)
-				fprintf(stderr, "Error: deltaH must be a value in the range (0.0, 1.0) and a divisor of the number of processes\n");
+			if (my_global_rank == 0)
+				fprintf(stderr, "Error: deltaH must be a value in the range (0.0, 1.0)\n");
 			MPI_Finalize();
 			exit(EXIT_FAILURE);
 		}
 	}
 
 	// Calculate the number of points in each axis
-	unsigned int npX = (unsigned int)(sizeX / deltaH);
-	unsigned int npY = (unsigned int)(sizeY / deltaH);
-	unsigned int npZ = (unsigned int)(sizeZ / deltaH);
+	npX = (unsigned int)(sizeX / deltaH);
+	npY = (unsigned int)(sizeY / deltaH);
+	npZ = (unsigned int)(sizeZ / deltaH);
 
-	/** The three-dimensional space will be divided into a number of slices across the X axis
-	 * matching the number of MPI processes, and which are made up of a set of points. */
-	unsigned int points_per_slice = npX / size;
+	// Discriminate the MPI processes that will compute the points and the remaining ones
+	is_computing_proc = (my_global_rank < npX) ? 1 : 0;
+	MPI_Comm_split(MPI_COMM_WORLD, is_computing_proc, my_global_rank, &compute_comm);
+	MPI_Comm_rank(compute_comm, &myrank);
+	MPI_Comm_size(compute_comm, &size);
 
-	/** Some slices might have more points than others if npX cannot be exactly divided by
-	 * the number of MPI processes, so we will implement the simplest approach for a load
-	 * balancing algorithm:
-	 *  	Distribute the remaining points among the first MPI processes.
-	 *  	Assuming equal workload for each point and equal hardware resources, this would
-	 *  	be the fairest algorithm.
-	 *
-	 *  Obviously, those conditions are not frequently met, so this algorithm is not
-	 *  the best one, but it will be enough for this first implementation.
-	 */
-	unsigned int remaining_points = npX % size;
-
-	/** Calculate the number of points for each MPI process. Processes with
-	 * myrank < remaining_points will have one more point. */
-	if (myrank < remaining_points)
-		points_per_slice++;
-
-	/** Calculate the first and last point in the slice for each MPI process,
-	 * considering that some processes will have one more point. */
-	unsigned int first_point = 0;
-	for (int i = 0; i < myrank; i++)
-		first_point += (i < remaining_points) ? (points_per_slice + 1) : points_per_slice;
-	unsigned int last_point = first_point + points_per_slice - 1;
-
-	// TODO: Idea:
-	// To avoid the subsequent execution for processes with 'points_per_slice' = 0, i.e. when num_procs > npX.
-
-	// Processes print the number of points in each axis
-	printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n", myrank, size, points_per_slice, npX, first_point, last_point);
-
-	// Allocating memory for the tri-dimensional space
-	/** Memory allocation for X axis.
-	 * In this case, we will allocate memory for the points in each slice, that is,
-	 * the value of points_per_slice.
-	 * We will also allocate memory for the two contiguous points in the X axis, because
-	 * the algorithm will need to access the values of that points in the neighbour slices.
-	 */
-	u0 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
-	u1 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
-
-	// Memory allocation for Y axis
-	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
+	if (is_computing_proc)
 	{
-		u0[i] = (double **)malloc(npY * sizeof(double *));
-		u1[i] = (double **)malloc(npY * sizeof(double *));
-	}
+		/** The three-dimensional space will be divided into a number of slices across the X axis
+		 * matching the number of MPI processes, and which are made up of a set of points. */
+		points_per_slice = npX / size;	// Provisional value
 
-	// Memory allocation for Z axis
-	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
-	{
-		for (unsigned int j = 0; j < npY; j++)
+		/** Some slices might have more points than others if npX cannot be exactly divided by
+		 * the number of MPI processes, so we will implement the simplest approach for a load
+		 * balancing algorithm:
+		 *  	Distribute the remaining points among the first MPI processes.
+		 *  	Assuming equal workload for each point and equal hardware resources, this would
+		 *  	be the fairest algorithm.
+		 *
+		 *  Obviously, those conditions are not frequently met, so this algorithm is not
+		 *  the best one, but it will be enough for this first implementation.
+		 */
+		remaining_points = npX % size;
+
+		// Calculate the definitive number of points for each MPI process
+		if (myrank < remaining_points)
+			points_per_slice++;
+
+		/** Calculate the first and last point in the slice for each MPI process,
+		 * considering that some processes will have one more point. */
+		first_point = 0;
+		for (i = 0; i < myrank; i++)
+			first_point += (i < npX % size) ? (points_per_slice + 1) : points_per_slice;
+		last_point = first_point + points_per_slice - 1;
+
+		// Processes print the number of points in each axis
+		printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n", 
+			myrank + 1, size, points_per_slice, npX, first_point, last_point);
+
+		// Allocating memory for the tri-dimensional space
+		/** Memory allocation for X axis.
+		 * We will allocate memory for:
+		 * - The points in each slice, that is, the value of points_per_slice.
+		 * - Two more points in the X axis, because the algorithm will need to access the
+		 *   left and right neighbour points.
+		 */
+		u0 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
+		u1 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
+
+		// Memory allocation for Y axis
+		for (i = 0; i < (points_per_slice + 2); i++)
 		{
-			double *aux0 = (double *)malloc(npZ * sizeof(double));
-			double *aux1 = (double *)malloc(npZ * sizeof(double));
-			// initial condition - zero in all points
-			memset(aux0, 0x01, npZ * sizeof(double));
-			memset(aux1, 0x02, npZ * sizeof(double));
-			u0[i][j] = aux0;
-			u1[i][j] = aux1;
+			u0[i] = (double **)malloc(npY * sizeof(double *));
+			u1[i] = (double **)malloc(npY * sizeof(double *));
 		}
-	}
 
-	// Each MPI process will compute its assigned points with the finite difference method
-	unsigned int steps, max_steps;
-	double start_time = MPI_Wtime();
-
-	steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point, myrank, size);
-
-	// Collect the number of steps from all MPI processes and get the maximum value
-	MPI_Reduce(&steps, &max_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
-
-	if (myrank == 0)
-		fprintf(stdout, "Done! in %u steps\n", max_steps);
-
-	double end_time = MPI_Wtime();
-	double execution_time = end_time - start_time;
-
-	// Get max execution time across all processes
-	double max_time;
-	MPI_Reduce(&execution_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-	if (myrank == 0)
-		printf("Total execution time: %f seconds\n", max_time);
-
-	// Free memory
-	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
-	{
-		for (unsigned int j = 0; j < npY; j++)
+		// Memory allocation for Z axis
+		for (i = 0; i < (points_per_slice + 2); i++)
 		{
-			free(u0[i][j]);
-			free(u1[i][j]);
+			for (j = 0; j < npY; j++)
+			{
+				aux0 = (double *)malloc(npZ * sizeof(double));
+				aux1 = (double *)malloc(npZ * sizeof(double));
+				// Initial condition: zero in all points
+				memset(aux0, 0x01, npZ * sizeof(double));
+				memset(aux1, 0x02, npZ * sizeof(double));
+				u0[i][j] = aux0;
+				u1[i][j] = aux1;
+			}
 		}
+
+		start_time = MPI_Wtime();
+
+		// Each MPI process will compute its assigned points with the finite difference method
+		steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point, myrank, size, compute_comm);
+
+		// Collect the number of steps from all MPI processes and get the maximum value
+		MPI_Reduce(&steps, &max_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, compute_comm);
+
+		end_time = MPI_Wtime();
+		execution_time = end_time - start_time;
+
+		// Get max execution time across all processes
+		MPI_Reduce(&execution_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, compute_comm);
+
+		// Print the results
+		if (myrank == 0)
+			printf("Done! in %u steps\nExecution time: %f seconds\n", max_steps, max_time);
+
+		// Free memory
+		for (i = 0; i < (points_per_slice + 2); i++)
+		{
+			for (j = 0; j < npY; j++)
+			{
+				free(u0[i][j]);
+				free(u1[i][j]);
+			}
+		}
+
+		for (i = 0; i < (points_per_slice + 2); i++)
+		{
+			free(u0[i]);
+			free(u1[i]);
+		}
+
+		free(u0);
+		free(u1);
 	}
 
-	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
-	{
-		free(u0[i]);
-		free(u1[i]);
-	}
-
-	free(u0);
-	free(u1);
+	// Free the subcommunicators
+	// Processes that do not compute points will also terminate their own subcommunicator
+	MPI_Comm_free(&compute_comm);
 
 	MPI_Finalize();
 

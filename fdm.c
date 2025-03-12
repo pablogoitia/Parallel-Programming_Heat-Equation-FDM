@@ -13,7 +13,6 @@
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
-#include <omp.h>
 
 unsigned int mdf_heat(double ***__restrict__ u0,
 					  double ***__restrict__ u1,

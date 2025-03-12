@@ -49,8 +49,9 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 	double ***ptr;
 	double err, maxErr;
 
-	// MPI Status variable
+	// MPI comms handling variables
 	MPI_Status status;
+	MPI_Request request_left, request_right;
 
 	// MPI Pack and Unpack variables
 	int position = 0;
@@ -62,91 +63,9 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 	{
 		steps++;
 
-		// Calculate the provisional values for the points in the slice, excluding 'left' and 'right' points
-		for (i = 1; i <= points_per_slice; i++)
-		{
-			for (j = 0; j < npY; j++)
-			{
-				for (k = 0; k < npZ; k++)
-				{
-					up = boundaries;
-					down = boundaries;
-					top = boundaries;
-					bottom = boundaries;
-
-					if ((j > 0) && (j < (npY - 1)))
-					{
-						up = u0[i][j - 1][k];
-						down = u0[i][j + 1][k];
-					}
-					else if (j == 0)
-						down = u0[i][j + 1][k];
-					else
-						up = u0[i][j - 1][k];
-
-					if ((k > 0) && (k < (npZ - 1)))
-					{
-						top = u0[i][j][k - 1];
-						bottom = u0[i][j][k + 1];
-					}
-					else if (k == 0)
-						bottom = u0[i][j][k + 1];
-					else
-						top = u0[i][j][k - 1];
-
-					// Calculates a provisional value for u1[i][j][k]
-					u1[i][j][k] = alpha * (top + bottom + up + down - (6.0f * u0[i][j][k])) + u0[i][j][k];
-				}
-			}
-		}
-
-		// Exchange first and last point values with neighbour MPI processes
-
-		if (myrank > 0)
-		{
-			position = 0;
-
-			// Send the content of the first point of the slice to the left neighbour
-			for (i = 0; i < npY; i++)
-				MPI_Pack(&u0[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
-
-			MPI_Send(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD);
-		}
-
-		if (myrank < (size - 1))
-		{
-			position = 0;
-
-			// Send the content of the last point of the slice to the right neighbour
-			for (i = 0; i < npY; i++)
-				MPI_Pack(&u0[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
-
-			MPI_Send(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD);
-		}
-
-		if (myrank > 0)
-		{
-			position = 0;
-
-			// Receive the content of the first point of the slice from the left neighbour
-			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &status);
-			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[0][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
-		}
-
-		if (myrank < (size - 1))
-		{
-			position = 0;
-
-			// Receive the content of the last point of the slice from the right neighbour
-			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &status);
-			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
-		}
-
 		i_internal = 1; // Internal index for the slice, which also avoids the 'left' point
 
-		// Calculate the definitive values for the points in the slice, including 'left' and 'right' points
+		// Calculate the provisional values for the points in the slice, excluding 'left' and 'right' points
 		for (i = first_point; i <= last_point; i++)
 		{
 			for (j = 0; j < npY; j++)
@@ -155,8 +74,11 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 				{
 					left = boundaries;
 					right = boundaries;
+					up = boundaries;
+					down = boundaries;
+					top = boundaries;
+					bottom = boundaries;
 
-					// Checks if the point is not in the borders of the TOTAL X axis
 					if ((i > 0) && (i < (npX - 1)))
 					{
 						left = u0[i_internal - 1][j][k];
@@ -167,11 +89,81 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					else
 						left = u0[i_internal - 1][j][k];
 
-					u1[i_internal][j][k] += alpha * (left + right);
+					if ((j > 0) && (j < (npY - 1)))
+					{
+						up = u0[i_internal][j - 1][k];
+						down = u0[i_internal][j + 1][k];
+					}
+					else if (j == 0)
+						down = u0[i_internal][j + 1][k];
+					else
+						up = u0[i_internal][j - 1][k];
+
+					if ((k > 0) && (k < (npZ - 1)))
+					{
+						top = u0[i_internal][j][k - 1];
+						bottom = u0[i_internal][j][k + 1];
+					}
+					else if (k == 0)
+						bottom = u0[i_internal][j][k + 1];
+					else
+						top = u0[i_internal][j][k - 1];
+
+					u1[i_internal][j][k] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[i_internal][j][k])) + u0[i_internal][j][k];
 				}
 			}
 			i_internal++;
 		}
+
+		// Exchange first and last point values with neighbour MPI processes
+		if (myrank > 0)
+		{
+			position = 0;
+
+			// Send the content of the first point of the slice to the left neighbour
+			for (i = 0; i < npY; i++)
+				MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
+
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &request_left);
+		}
+
+		if (myrank < (size - 1))
+		{
+			position = 0;
+
+			// Send the content of the last point of the slice to the right neighbour
+			for (i = 0; i < npY; i++)
+				MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
+
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &request_right);
+		}
+
+		if (myrank > 0)
+		{
+			position = 0;
+
+			// Receive the content of the first point of the slice from the left neighbour
+			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &status);
+			for (i = 0; i < npY; i++)
+				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
+		}
+
+		if (myrank < (size - 1))
+		{
+			position = 0;
+
+			// Receive the content of the last point of the slice from the right neighbour
+			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &status);
+			for (i = 0; i < npY; i++)
+				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
+		}
+
+		// Check if the sent messages have been received, although it is implicit in previous MPI_Recv
+		if (myrank > 0)
+			MPI_Wait(&request_left, &status);
+
+		if (myrank < (size - 1))
+			MPI_Wait(&request_right, &status);
 
 		// Swap the pointers (the next instant of time is now the current time)
 		ptr = u0;
@@ -199,23 +191,9 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 		// if (myrank == 0)
 		// 	printf ("err = %.4g > inErr = %.4g\n", err, inErr);
 
-		// Check if any message indicating completion was found
-		int flag;
-		MPI_Status probe_status;
-		MPI_Message msg;
-		MPI_Improbe(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &flag, &msg, &probe_status);
-		if (flag)
-		{
-			// Discard the message from the source
-			MPI_Mrecv(&continued, 1, MPI_INT, &msg, &status);
-
-			continued = 0;
-		}
+		// Use MPI_LAND to check if any process has set 'continued' to 0
+		MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
 	}
-
-	for (int i = 0; i < size; i++)
-		if (i != myrank)
-			MPI_Send(&continued, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
 
 	return steps;
 }
@@ -294,7 +272,7 @@ int main(int ac, char **av)
 	u1 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
 
 	// Processes print the number of points in each axis
-	printf("I am process %d of %d. p(%u, %u, %u). points_per_slice=%d. first_point=%d, last_point=%d\n", myrank, size, npX, npY, npZ, points_per_slice, first_point, last_point);
+	printf("I am process %d of %d. points_per_slice=%d. first_point=%d, last_point=%d\n", myrank, size, points_per_slice, first_point, last_point);
 
 	// Memory allocation for Y axis
 	for (unsigned int i = 0; i < (points_per_slice + 2); i++)

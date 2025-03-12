@@ -217,14 +217,18 @@ int main(int ac, char **av)
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	// Input processing (common for all MPI processes)
+	/** Input processing (common for all MPI processes)
+	 * 	- The deltaH parameter must be in the range (0.0, 1.0)
+	 * 	- The deltaH parameter must be a divisor of the number of processes
+	 */
 	if (ac > 1)
 	{
 		deltaH = atof(av[1]);
-		if (deltaH <= 0.0f || deltaH >= 1.0f)
+		if (deltaH <= 0.0f || deltaH >= 1.0f || (int)(sizeX / deltaH) % size != 0)
 		{
 			if (myrank == 0)
-				fprintf(stderr, "Error: deltaH must be (0.0, 1.0)\n");
+				fprintf(stderr, "Error: deltaH must be a value in the range (0.0, 1.0) and a divisor of the number of processes\n");
+			MPI_Finalize();
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -269,7 +273,12 @@ int main(int ac, char **av)
 	printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n", myrank, size, points_per_slice, npX, first_point, last_point);
 
 	// Allocating memory for the tri-dimensional space
-	// Memory allocation for X axis
+	/** Memory allocation for X axis.
+	 * In this case, we will allocate memory for the points in each slice, that is,
+	 * the value of points_per_slice.
+	 * We will also allocate memory for the two contiguous points in the X axis, because
+	 * the algorithm will need to access the values of that points in the neighbour slices.
+	 */
 	u0 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
 	u1 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
 
@@ -280,12 +289,7 @@ int main(int ac, char **av)
 		u1[i] = (double **)malloc(npY * sizeof(double *));
 	}
 
-	/** Memory allocation for Z axis.
-	 * In this case, we will allocate memory for the points in each slice, that is,
-	 * the value of points_per_slice.
-	 * We will also allocate memory for the two contiguous points in the X axis, because
-	 * the algorithm will need to access the values of that points in the neighbour slices.
-	 */
+	// Memory allocation for Z axis
 	for (unsigned int i = 0; i < (points_per_slice + 2); i++)
 	{
 		for (unsigned int j = 0; j < npY; j++)

@@ -169,7 +169,7 @@ int main (int ac, char **av){
   
   clock_gettime(CLOCK_MONOTONIC, &end);
   double execution_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-  printf("Execution time: %.3f seconds\n", execution_time);
+  printf("Execution time: %f seconds\n", execution_time);
   //mdf_print(u1,  npX, npY, npZ);
   
   //Free memory

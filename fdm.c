@@ -266,13 +266,13 @@ int main(int ac, char **av)
 	// TODO: Idea:
 	// To avoid the subsequent execution for processes with 'points_per_slice' = 0, i.e. when num_procs > npX.
 
+	// Processes print the number of points in each axis
+	printf("I am process %d of %d. points_per_slice=%d. first_point=%d, last_point=%d\n", myrank, size, points_per_slice, first_point, last_point);
+
 	// Allocating memory for the tri-dimensional space
 	// Memory allocation for X axis
 	u0 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
 	u1 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
-
-	// Processes print the number of points in each axis
-	printf("I am process %d of %d. points_per_slice=%d. first_point=%d, last_point=%d\n", myrank, size, points_per_slice, first_point, last_point);
 
 	// Memory allocation for Y axis
 	for (unsigned int i = 0; i < (points_per_slice + 2); i++)

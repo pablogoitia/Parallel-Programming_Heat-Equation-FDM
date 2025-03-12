@@ -51,7 +51,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 	// MPI comms handling variables
 	MPI_Status status;
-	MPI_Request request_left, request_right;
+	MPI_Request request_s_left, request_s_right, request_r_left, request_r_right;
 
 	// MPI Pack and Unpack variables
 	int position = 0;
@@ -124,7 +124,14 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
 
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &request_left);
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &request_s_left);
+
+			position = 0;
+
+			// Receive the content of the first point of the slice from the left neighbour
+			MPI_Irecv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &request_r_left);
+			for (i = 0; i < npY; i++)
+				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
 		}
 
 		if (myrank < (size - 1))
@@ -135,35 +142,28 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, MPI_COMM_WORLD);
 
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &request_right);
-		}
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &request_s_right);
 
-		if (myrank > 0)
-		{
-			position = 0;
-
-			// Receive the content of the first point of the slice from the left neighbour
-			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, MPI_COMM_WORLD, &status);
-			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
-		}
-
-		if (myrank < (size - 1))
-		{
 			position = 0;
 
 			// Receive the content of the last point of the slice from the right neighbour
-			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &status);
+			MPI_Irecv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, MPI_COMM_WORLD, &request_r_right);
 			for (i = 0; i < npY; i++)
 				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, MPI_COMM_WORLD);
 		}
 
-		// Check if the sent messages have been received, although it is implicit in previous MPI_Recv
+		// Check if the messages have been sent and received
 		if (myrank > 0)
-			MPI_Wait(&request_left, &status);
+		{
+			MPI_Wait(&request_s_left, &status);
+			MPI_Wait(&request_r_left, &status);
+		}
 
 		if (myrank < (size - 1))
-			MPI_Wait(&request_right, &status);
+		{
+			MPI_Wait(&request_s_right, &status);
+			MPI_Wait(&request_r_right, &status);
+		}
 
 		// Swap the pointers (the next instant of time is now the current time)
 		ptr = u0;
@@ -267,7 +267,7 @@ int main(int ac, char **av)
 	// To avoid the subsequent execution for processes with 'points_per_slice' = 0, i.e. when num_procs > npX.
 
 	// Processes print the number of points in each axis
-	printf("I am process %d of %d. points_per_slice=%d. first_point=%d, last_point=%d\n", myrank, size, points_per_slice, first_point, last_point);
+	printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n", myrank, size, points_per_slice, npX, first_point, last_point);
 
 	// Allocating memory for the tri-dimensional space
 	// Memory allocation for X axis

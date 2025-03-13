@@ -322,7 +322,7 @@ int main(int ac, char **av)
 		start_time = MPI_Wtime();
 
 		// Each MPI process will compute its assigned points with the finite difference method
-		steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point, myrank, size, compute_comm);
+		steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, compute_comm, myrank, size, first_point, last_point);
 
 		// Collect the number of steps from all MPI processes and get the maximum value
 		MPI_Reduce(&steps, &max_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, compute_comm);

@@ -13,6 +13,7 @@
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 
 unsigned int mdf_heat(double ***__restrict__ u0,
 					  double ***__restrict__ u1,
@@ -63,56 +64,57 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 	{
 		steps++;
 
-		i_internal = 1; // Internal index for the slice, which also avoids the 'left' point
-
-		// Calculate the provisional values for the points in the slice, excluding 'left' and 'right' points
-		for (i = first_point; i <= last_point; i++)
+		#pragma omp parallel num_threads(2) shared(u0, u1, first_point, last_point, npX, npY, npZ, boundaries, alpha) private(i, j, k, left, right, up, down, top, bottom, i_internal)
 		{
-			for (j = 0; j < npY; j++)
+			#pragma omp parallel for collapse(2) schedule(dynamic)
+			for (i = first_point; i <= last_point; i++)
 			{
-				for (k = 0; k < npZ; k++)
+				for (j = 0; j < npY; j++)
 				{
-					left = boundaries;
-					right = boundaries;
-					up = boundaries;
-					down = boundaries;
-					top = boundaries;
-					bottom = boundaries;
-
-					if ((i > 0) && (i < (npX - 1)))
+					for (k = 0; k < npZ; k++)
 					{
-						left = u0[i_internal - 1][j][k];
-						right = u0[i_internal + 1][j][k];
-					}
-					else if (i == 0)
-						right = u0[i_internal + 1][j][k];
-					else
-						left = u0[i_internal - 1][j][k];
+						i_internal = i - first_point + 1;
+						left = boundaries;
+						right = boundaries;
+						up = boundaries;
+						down = boundaries;
+						top = boundaries;
+						bottom = boundaries;
 
-					if ((j > 0) && (j < (npY - 1)))
-					{
-						up = u0[i_internal][j - 1][k];
-						down = u0[i_internal][j + 1][k];
-					}
-					else if (j == 0)
-						down = u0[i_internal][j + 1][k];
-					else
-						up = u0[i_internal][j - 1][k];
+						if ((i > 0) && (i < (npX - 1)))
+						{
+							left = u0[i_internal - 1][j][k];
+							right = u0[i_internal + 1][j][k];
+						}
+						else if (i == 0)
+							right = u0[i_internal + 1][j][k];
+						else
+							left = u0[i_internal - 1][j][k];
 
-					if ((k > 0) && (k < (npZ - 1)))
-					{
-						top = u0[i_internal][j][k - 1];
-						bottom = u0[i_internal][j][k + 1];
-					}
-					else if (k == 0)
-						bottom = u0[i_internal][j][k + 1];
-					else
-						top = u0[i_internal][j][k - 1];
+						if ((j > 0) && (j < (npY - 1)))
+						{
+							up = u0[i_internal][j - 1][k];
+							down = u0[i_internal][j + 1][k];
+						}
+						else if (j == 0)
+							down = u0[i_internal][j + 1][k];
+						else
+							up = u0[i_internal][j - 1][k];
 
-					u1[i_internal][j][k] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[i_internal][j][k])) + u0[i_internal][j][k];
+						if ((k > 0) && (k < (npZ - 1)))
+						{
+							top = u0[i_internal][j][k - 1];
+							bottom = u0[i_internal][j][k + 1];
+						}
+						else if (k == 0)
+							bottom = u0[i_internal][j][k + 1];
+						else
+							top = u0[i_internal][j][k - 1];
+
+						u1[i_internal][j][k] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[i_internal][j][k])) + u0[i_internal][j][k];
+					}
 				}
 			}
-			i_internal++;
 		}
 
 		// Exchange first and last point values with neighbour MPI processes
@@ -322,7 +324,7 @@ int main(int ac, char **av)
 		start_time = MPI_Wtime();
 
 		// Each MPI process will compute its assigned points with the finite difference method
-		steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, first_point, last_point, myrank, size, compute_comm);
+		steps = mdf_heat(u0, u1, npX, npY, npZ, deltaH, deltaT, 1e-15, 100.0f, compute_comm, myrank, size, first_point, last_point);
 
 		// Collect the number of steps from all MPI processes and get the maximum value
 		MPI_Reduce(&steps, &max_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, compute_comm);

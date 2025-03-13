@@ -23,11 +23,11 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					  const double deltaT,
 					  const double inErr,
 					  const double boundaries,
-					  const unsigned int first_point,
-					  const unsigned int last_point,
+					  MPI_Comm compute_comm,
 					  const int myrank,
 					  const int size,
-					  MPI_Comm compute_comm)
+					  const unsigned int first_point,
+					  const unsigned int last_point)
 {
 
 	register double alpha = deltaT / (deltaH * deltaH);
@@ -258,7 +258,7 @@ int main(int ac, char **av)
 	{
 		/** The three-dimensional space will be divided into a number of slices across the X axis
 		 * matching the number of MPI processes, and which are made up of a set of points. */
-		points_per_slice = npX / size;	// Provisional value
+		points_per_slice = npX / size; // Provisional value
 
 		/** Some slices might have more points than others if npX cannot be exactly divided by
 		 * the number of MPI processes, so we will implement the simplest approach for a load
@@ -284,8 +284,8 @@ int main(int ac, char **av)
 		last_point = first_point + points_per_slice - 1;
 
 		// Processes print the number of points in each axis
-		printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n", 
-			myrank + 1, size, points_per_slice, npX, first_point, last_point);
+		printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n",
+			   myrank + 1, size, points_per_slice, npX, first_point, last_point);
 
 		// Allocating memory for the tri-dimensional space
 		/** Memory allocation for X axis.

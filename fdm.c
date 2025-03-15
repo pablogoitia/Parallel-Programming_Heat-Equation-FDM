@@ -52,7 +52,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 	// MPI comms handling variables
 	MPI_Status status;
-	MPI_Request request_s_left, request_s_right, request_r_left, request_r_right;
+	MPI_Request request_left, request_right;
 
 	// MPI Pack and Unpack variables
 	int position = 0;
@@ -60,12 +60,17 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 	// Buffer for MPI communication
 	double *buffer = (double *)malloc(npY * npZ * sizeof(double));
 
-	while (continued)
+	#pragma omp parallel \
+	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, ptr, status, request_left, request_right, buffer) \
+	private(i, j, k, i_internal, left, right, up, down, top, bottom, err, maxErr, position)
 	{
-		steps++;
-
-		#pragma omp parallel num_threads(2) shared(u0, u1, first_point, last_point, npX, npY, npZ, boundaries, alpha) private(i, j, k, left, right, up, down, top, bottom, i_internal)
+		while (continued)
 		{
+			#pragma omp single
+			{
+				steps++;
+			}
+
 			#pragma omp parallel for collapse(2) schedule(dynamic)
 			for (i = first_point; i <= last_point; i++)
 			{
@@ -115,77 +120,87 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					}
 				}
 			}
-		}
 
-		// Exchange first and last point values with neighbour MPI processes
-		if (myrank > 0)
-		{
-			position = 0;
+			#pragma omp barrier
 
-			// Send the content of the first point of the slice to the left neighbour
-			for (i = 0; i < npY; i++)
-				MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
-
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_s_left);
-
-			position = 0;
-
-			// Receive the content of the first point of the slice from the left neighbour
-			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &status);
-			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, compute_comm);
-		}
-
-		if (myrank < (size - 1))
-		{
-			position = 0;
-
-			// Send the content of the last point of the slice to the right neighbour
-			for (i = 0; i < npY; i++)
-				MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
-
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_s_right);
-
-			position = 0;
-
-			// Receive the content of the last point of the slice from the right neighbour
-			MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &status);
-			for (i = 0; i < npY; i++)
-				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, compute_comm);
-		}
-
-		// Check if the messages have been sent and received
-		if (myrank > 0)
-			MPI_Wait(&request_s_left, &status);
-
-		if (myrank < (size - 1))
-			MPI_Wait(&request_s_right, &status);
-
-		// Swap the pointers (the next instant of time is now the current time)
-		ptr = u0;
-		u0 = u1;
-		u1 = ptr;
-
-		// Calculate the error
-		err = 0.0f;
-		maxErr = 0.0f;
-		for (i = 1; i <= points_per_slice; i++)
-		{
-			for (j = 0; j < npY; j++)
+			#pragma omp single
 			{
-				for (k = 0; k < npZ; k++)
+				// Exchange first and last point values with neighbour MPI processes
+				if (myrank > 0)
 				{
-					err = fabs(u0[i][j][k] - boundaries);
-					if (err > inErr)
-						maxErr = err;
-					else
-						continued = 0;
+					position = 0;
+
+					// Send the content of the first point of the slice to the left neighbour
+					for (i = 0; i < npY; i++)
+						MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
+
+					MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
+
+					position = 0;
+
+					// Receive the content of the first point of the slice from the left neighbour
+					MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &status);
+					for (i = 0; i < npY; i++)
+						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, compute_comm);
+				}
+
+				if (myrank < (size - 1))
+				{
+					position = 0;
+
+					// Send the content of the last point of the slice to the right neighbour
+					for (i = 0; i < npY; i++)
+						MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
+
+					MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_right);
+
+					position = 0;
+
+					// Receive the content of the last point of the slice from the right neighbour
+					MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &status);
+					for (i = 0; i < npY; i++)
+						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, compute_comm);
+				}
+
+				// Check if the messages have been sent and received
+				if (myrank > 0)
+					MPI_Wait(&request_left, &status);
+
+				if (myrank < (size - 1))
+					MPI_Wait(&request_right, &status);
+
+				// Swap the pointers (the next instant of time is now the current time)
+				ptr = u0;
+				u0 = u1;
+				u1 = ptr;
+			}
+
+			// Calculate the error
+			err = 0.0f;
+			maxErr = 0.0f;
+
+			#pragma omp for collapse(2) schedule(dynamic) reduction(& : continued)
+			for (i = 1; i <= points_per_slice; i++)
+			{
+				for (j = 0; j < npY; j++)
+				{
+					for (k = 0; k < npZ; k++)
+					{
+						err = fabs(u0[i][j][k] - boundaries);
+						if (err > inErr)
+							maxErr = err;
+						else
+							continued = 0;
+					}
 				}
 			}
-		}
 
-		// Use MPI_LAND to check if any process has set 'continued' to 0
-		MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
+			#pragma omp single
+			{
+				// Use MPI_LAND to check if any process has set 'continued' to 0
+				MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
+			}
+		}
 	}
 
 	return steps;

@@ -51,7 +51,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 	// MPI comms handling variables
 	MPI_Status status;
-	MPI_Request request_s_left, request_s_right, request_r_left, request_r_right;
+	MPI_Request request_left, request_right;
 
 	// MPI Pack and Unpack variables
 	int position = 0;
@@ -124,7 +124,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
 
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_s_left);
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
 
 			position = 0;
 
@@ -142,7 +142,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			for (i = 0; i < npY; i++)
 				MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
 
-			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_s_right);
+			MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_right);
 
 			position = 0;
 
@@ -154,10 +154,10 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 		// Check if the messages have been sent and received
 		if (myrank > 0)
-			MPI_Wait(&request_s_left, &status);
+			MPI_Wait(&request_left, &status);
 
 		if (myrank < (size - 1))
-			MPI_Wait(&request_s_right, &status);
+			MPI_Wait(&request_right, &status);
 
 		// Swap the pointers (the next instant of time is now the current time)
 		ptr = u0;

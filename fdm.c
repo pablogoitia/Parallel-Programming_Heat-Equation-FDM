@@ -59,6 +59,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 	// Buffer for MPI communication
 	double *buffer = (double *)malloc(npY * npZ * sizeof(double));
+	double t_block_start, t_block_end, total_time = 0.0f;
 
 	#pragma omp parallel \
 	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, ptr, status, request_left, request_right, buffer) \
@@ -69,9 +70,13 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			#pragma omp single
 			{
 				steps++;
+				t_block_start = MPI_Wtime();
 			}
 
-			#pragma omp parallel for collapse(2) schedule(dynamic)
+			err = 0.0f;
+			maxErr = 0.0f;
+
+			#pragma omp for schedule(static) reduction(& : continued)
 			for (i = first_point; i <= last_point; i++)
 			{
 				for (j = 0; j < npY; j++)
@@ -117,14 +122,34 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 							top = u0[i_internal][j][k - 1];
 
 						u1[i_internal][j][k] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[i_internal][j][k])) + u0[i_internal][j][k];
+						err = fabs(u1[i_internal][j][k] - boundaries);
+						if (err > inErr)
+							maxErr = err;
+						else
+							continued = 0;
 					}
 				}
 			}
+			
+			#pragma omp single
+			{
+				t_block_end = MPI_Wtime();
+				total_time += t_block_end - t_block_start;
 
-			#pragma omp barrier
+				// Use MPI_LAND to check if any process has set 'continued' to 0
+				MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
+			}
+			
+			if (continued == 0)
+				break;
 
 			#pragma omp single
 			{
+				// Swap the pointers (the next instant of time is now the current time)
+				ptr = u0;
+				u0 = u1;
+				u1 = ptr;
+
 				// Exchange first and last point values with neighbour MPI processes
 				if (myrank > 0)
 				{
@@ -132,7 +157,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 					// Send the content of the first point of the slice to the left neighbour
 					for (i = 0; i < npY; i++)
-						MPI_Pack(&u1[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
+						MPI_Pack(&u0[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
 
 					MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
 
@@ -141,7 +166,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					// Receive the content of the first point of the slice from the left neighbour
 					MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &status);
 					for (i = 0; i < npY; i++)
-						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[0][i][0], npZ, MPI_DOUBLE, compute_comm);
+						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[0][i][0], npZ, MPI_DOUBLE, compute_comm);
 				}
 
 				if (myrank < (size - 1))
@@ -150,7 +175,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 					// Send the content of the last point of the slice to the right neighbour
 					for (i = 0; i < npY; i++)
-						MPI_Pack(&u1[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
+						MPI_Pack(&u0[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
 
 					MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_right);
 
@@ -159,7 +184,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 					// Receive the content of the last point of the slice from the right neighbour
 					MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &status);
 					for (i = 0; i < npY; i++)
-						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, compute_comm);
+						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, compute_comm);
 				}
 
 				// Check if the messages have been sent and received
@@ -168,40 +193,11 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 				if (myrank < (size - 1))
 					MPI_Wait(&request_right, &status);
-
-				// Swap the pointers (the next instant of time is now the current time)
-				ptr = u0;
-				u0 = u1;
-				u1 = ptr;
-			}
-
-			// Calculate the error
-			err = 0.0f;
-			maxErr = 0.0f;
-
-			#pragma omp for collapse(2) schedule(dynamic) reduction(& : continued)
-			for (i = 1; i <= points_per_slice; i++)
-			{
-				for (j = 0; j < npY; j++)
-				{
-					for (k = 0; k < npZ; k++)
-					{
-						err = fabs(u0[i][j][k] - boundaries);
-						if (err > inErr)
-							maxErr = err;
-						else
-							continued = 0;
-					}
-				}
-			}
-
-			#pragma omp single
-			{
-				// Use MPI_LAND to check if any process has set 'continued' to 0
-				MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
 			}
 		}
 	}
+
+	printf("Process %d: Computation block time: %f seconds\n", myrank, total_time);
 
 	return steps;
 }

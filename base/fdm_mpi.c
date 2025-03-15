@@ -152,7 +152,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 				MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u1[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, compute_comm);
 		}
 
-		// Check if the messages have been sent and received
+		// Check if the messages have been sent
 		if (myrank > 0)
 			MPI_Wait(&request_left, &status);
 

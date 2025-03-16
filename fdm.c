@@ -15,8 +15,8 @@
 #include <mpi.h>
 #include <omp.h>
 
-unsigned int mdf_heat(double ***__restrict__ u0,
-					  double ***__restrict__ u1,
+unsigned int mdf_heat(double *__restrict__ u0,
+					  double *__restrict__ u1,
 					  const unsigned int npX,
 					  const unsigned int npY,
 					  const unsigned int npZ,
@@ -36,7 +36,7 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 	register unsigned int steps = 0;
 
 	// Loop indexes
-	unsigned int i, j, k, i_internal;
+	unsigned int i, j, k, idx;
 	unsigned int points_per_slice = last_point - first_point + 1;
 
 	// Boundaries
@@ -54,20 +54,16 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 	MPI_Status status;
 	MPI_Request request_left, request_right;
 
-	// MPI Pack and Unpack variables
-	int position = 0;
-
 	// Buffer for MPI communication
-	double *buffer = (double *)malloc(npY * npZ * sizeof(double));
 	double t_block_start, t_block_end, total_time = 0.0f;
 
 	#pragma omp parallel \
-	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, ptr, status, request_left, request_right, buffer) \
-	private(i, j, k, i_internal, left, right, up, down, top, bottom, err, maxErr, position)
+	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, ptr, status, request_left, request_right) \
+	private(i, j, k, idx, left, right, up, down, top, bottom, err, maxErr)
 	{
 		while (continued)
 		{
-			#pragma omp single
+			#pragma omp single nowait
 			{
 				steps++;
 				t_block_start = MPI_Wtime();
@@ -76,14 +72,13 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 			err = 0.0f;
 			maxErr = 0.0f;
 
-			#pragma omp for schedule(static) reduction(& : continued)
+			#pragma omp for schedule(dynamic) reduction(& : continued)
 			for (i = first_point; i <= last_point; i++)
 			{
 				for (j = 0; j < npY; j++)
 				{
 					for (k = 0; k < npZ; k++)
 					{
-						i_internal = i - first_point + 1;
 						left = boundaries;
 						right = boundaries;
 						up = boundaries;
@@ -91,38 +86,41 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 						top = boundaries;
 						bottom = boundaries;
 
+						idx = (i - first_point + 1) * npY * npZ + j * npZ + k;
+
 						if ((i > 0) && (i < (npX - 1)))
 						{
-							left = u0[i_internal - 1][j][k];
-							right = u0[i_internal + 1][j][k];
+							left = u0[idx - npY * npZ];
+							right = u0[idx + npY * npZ]; 
 						}
 						else if (i == 0)
-							right = u0[i_internal + 1][j][k];
+							right = u0[idx + npY * npZ];
 						else
-							left = u0[i_internal - 1][j][k];
+							left = u0[idx - npY * npZ];
 
 						if ((j > 0) && (j < (npY - 1)))
 						{
-							up = u0[i_internal][j - 1][k];
-							down = u0[i_internal][j + 1][k];
+							up = u0[idx - npZ];
+							down = u0[idx + npZ];
 						}
 						else if (j == 0)
-							down = u0[i_internal][j + 1][k];
+							down = u0[idx + npZ];
 						else
-							up = u0[i_internal][j - 1][k];
+							up = u0[idx - npZ];
 
 						if ((k > 0) && (k < (npZ - 1)))
 						{
-							top = u0[i_internal][j][k - 1];
-							bottom = u0[i_internal][j][k + 1];
+							top = u0[idx - 1];
+							bottom = u0[idx + 1];
 						}
 						else if (k == 0)
-							bottom = u0[i_internal][j][k + 1];
+							bottom = u0[idx + 1];
 						else
-							top = u0[i_internal][j][k - 1];
+							top = u0[idx - 1];
 
-						u1[i_internal][j][k] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[i_internal][j][k])) + u0[i_internal][j][k];
-						err = fabs(u1[i_internal][j][k] - boundaries);
+						u1[idx] = alpha * (top + bottom + up + down + left + right - (6.0f * u0[idx])) + u0[idx];
+
+						err = fabs(u1[idx] - boundaries);
 						if (err > inErr)
 							maxErr = err;
 						else
@@ -145,54 +143,37 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 
 			#pragma omp single
 			{
-				// Swap the pointers (the next instant of time is now the current time)
-				ptr = u0;
-				u0 = u1;
-				u1 = ptr;
-
 				// Exchange first and last point values with neighbour MPI processes
 				if (myrank > 0)
 				{
-					position = 0;
-
 					// Send the content of the first point of the slice to the left neighbour
-					for (i = 0; i < npY; i++)
-						MPI_Pack(&u0[1][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
-
-					MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
-
-					position = 0;
+					MPI_Isend(&u1[npZ * npY], npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
 
 					// Receive the content of the first point of the slice from the left neighbour
-					MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &status);
-					for (i = 0; i < npY; i++)
-						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[0][i][0], npZ, MPI_DOUBLE, compute_comm);
+					MPI_Irecv(&u1[0], npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
+
 				}
 
 				if (myrank < (size - 1))
 				{
-					position = 0;
-
 					// Send the content of the last point of the slice to the right neighbour
-					for (i = 0; i < npY; i++)
-						MPI_Pack(&u0[points_per_slice][i][0], npZ, MPI_DOUBLE, buffer, npY * npZ * sizeof(double), &position, compute_comm);
-
-					MPI_Isend(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_right);
-
-					position = 0;
+					MPI_Isend(&u1[npZ * npY * points_per_slice], npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_right);
 
 					// Receive the content of the last point of the slice from the right neighbour
-					MPI_Recv(buffer, npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &status);
-					for (i = 0; i < npY; i++)
-						MPI_Unpack(buffer, npY * npZ * sizeof(double), &position, &u0[points_per_slice + 1][i][0], npZ, MPI_DOUBLE, compute_comm);
+					MPI_Irecv(&u1[npZ * npY * (points_per_slice + 1)], npY * npZ, MPI_DOUBLE, myrank + 1, steps, compute_comm, &request_right);
 				}
 
-				// Check if the messages have been sent and received
+				// Check if the messages have been received
 				if (myrank > 0)
 					MPI_Wait(&request_left, &status);
 
 				if (myrank < (size - 1))
 					MPI_Wait(&request_right, &status);
+
+				// Swap the pointers (the next instant of time is now the current time)
+				double *temp = u0;
+				u0 = u1;
+				u1 = temp;
 			}
 		}
 	}
@@ -205,8 +186,8 @@ unsigned int mdf_heat(double ***__restrict__ u0,
 int main(int ac, char **av)
 {
 	// Data structures
-	double ***u0;
-	double ***u1;
+	double *u0;
+	double *u1;
 
 	// Loop indexes
 	unsigned int i, j;
@@ -300,37 +281,17 @@ int main(int ac, char **av)
 		printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n",
 			   myrank + 1, size, points_per_slice, npX, first_point, last_point);
 
-		// Allocating memory for the tri-dimensional space
-		/** Memory allocation for X axis.
-		 * We will allocate memory for:
+		/** Allocating memory for the tri-dimensional space, including:
 		 * - The points in each slice, that is, the value of points_per_slice.
 		 * - Two more points in the X axis, because the algorithm will need to access the
 		 *   left and right neighbour points.
 		 */
-		u0 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
-		u1 = (double ***)malloc((points_per_slice + 2) * sizeof(double **));
+		u0 = malloc((points_per_slice + 2) * npY * npZ * sizeof(double *));
+		u1 = malloc((points_per_slice + 2) * npY * npZ * sizeof(double *));
 
-		// Memory allocation for Y axis
-		for (i = 0; i < (points_per_slice + 2); i++)
-		{
-			u0[i] = (double **)malloc(npY * sizeof(double *));
-			u1[i] = (double **)malloc(npY * sizeof(double *));
-		}
-
-		// Memory allocation for Z axis
-		for (i = 0; i < (points_per_slice + 2); i++)
-		{
-			for (j = 0; j < npY; j++)
-			{
-				aux0 = (double *)malloc(npZ * sizeof(double));
-				aux1 = (double *)malloc(npZ * sizeof(double));
-				// Initial condition: zero in all points
-				memset(aux0, 0x01, npZ * sizeof(double));
-				memset(aux1, 0x02, npZ * sizeof(double));
-				u0[i][j] = aux0;
-				u1[i][j] = aux1;
-			}
-		}
+		// Initial condition: zero in all points
+		memset(u0, 0x01, (points_per_slice + 2) * npY * npZ * sizeof(double *));
+		memset(u1, 0x02, (points_per_slice + 2) * npY * npZ * sizeof(double *));
 
 		start_time = MPI_Wtime();
 
@@ -351,21 +312,6 @@ int main(int ac, char **av)
 			printf("Done! in %u steps\nExecution time: %f seconds\n", max_steps, max_time);
 
 		// Free memory
-		for (i = 0; i < (points_per_slice + 2); i++)
-		{
-			for (j = 0; j < npY; j++)
-			{
-				free(u0[i][j]);
-				free(u1[i][j]);
-			}
-		}
-
-		for (i = 0; i < (points_per_slice + 2); i++)
-		{
-			free(u0[i]);
-			free(u1[i]);
-		}
-
 		free(u0);
 		free(u1);
 	}

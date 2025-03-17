@@ -30,7 +30,6 @@ unsigned int mdf_heat(double *__restrict__ u0,
 					  const unsigned int first_point,
 					  const unsigned int last_point)
 {
-
 	register double alpha = deltaT / (deltaH * deltaH);
 	int continued = 1;
 	register unsigned int steps = 0;
@@ -54,7 +53,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	MPI_Status status;
 	MPI_Request request_left, request_right;
 
-	// Buffer for MPI communication
+	// Time measurement variables
 	double t_block_start, t_block_end, total_time = 0.0f;
 
 	#pragma omp parallel \

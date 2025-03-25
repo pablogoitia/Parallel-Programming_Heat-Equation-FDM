@@ -276,7 +276,6 @@ int main(int ac, char **av)
 	npZ = (unsigned int)(sizeZ / deltaH);
 
 	// The X axis is divided into a fair number of slices depending on the power of the cores
-	double node_capacity = 0;
 	double W = 0;	// Total capacity of the system (total frequency)
 
 	for (int i = 0; i < TYPES_OF_NODES; i++)
@@ -346,11 +345,6 @@ int main(int ac, char **av)
 		// Print the results
 		if (myrank == 0)
 			printf("Done! in %u steps\nExecution time: %f seconds\n", max_steps, max_time);
-
-			if (myrank == 0)
-			{
-				printf("Frequency of cores in node: %d\n", get_frequency_of_cores_in_node());
-			}
 
 		// Free memory
 		free(u0);

@@ -314,8 +314,8 @@ int main(int ac, char **av)
 		last_point = first_point + points_per_slice - 1;
 
 		// Processes print the number of points to compute
-		printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n",
-			   myrank + 1, size, points_per_slice, npX, first_point, last_point);
+		printf("I am process %d of %d in %s. points_per_slice=%d of %d. first_point=%d, last_point=%d\n",
+			   myrank + 1, size, mynode.root_name, points_per_slice, npX, first_point, last_point);
 
 		/** Allocating memory for the tri-dimensional space, including:
 		 * - The points in each slice, that is, the value of points_per_slice.

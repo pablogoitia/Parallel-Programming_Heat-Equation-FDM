@@ -79,7 +79,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	{
 		while (continued)
 		{
-			#pragma omp single nowait
+			#pragma omp single
 			{
 				steps++;
 				t_block_start = MPI_Wtime();

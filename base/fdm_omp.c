@@ -1,10 +1,12 @@
 /*****************************************************************
-/* Author: Pablo Goitia <pablo.goitia@alumnos.unican.es>
-/* Project: Finite-Difference Approximation to the Heat Equation
-/* Date: Mar-2025
-/*
-/* Usage: ./fdm [deltaH]
-/*****************************************************************/
+ * Author: Pablo Goitia <pablo.goitia@alumnos.unican.es>
+ * Project: Finite-Difference Approximation to the Heat Equation
+ * Version: MPI + OpenMP
+ * Date: Mar-2025
+ *
+ * Usage: ./fdm [deltaH]
+ * Compile: mpicc -o fdm fdm.c -fopenmp
+ *****************************************************************/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -46,7 +48,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	register double top;
 	register double bottom;
 
-	double ***ptr;
+	double *temp;
 	double err, maxErr;
 
 	// MPI comms handling variables
@@ -57,7 +59,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	double t_block_start, t_block_end, total_time = 0.0f;
 
 	#pragma omp parallel \
-	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, ptr, status, request_left, request_right) \
+	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, temp, status, request_left, request_right, t_block_start, t_block_end, total_time) \
 	private(i, j, k, idx, left, right, up, down, top, bottom, err, maxErr)
 	{
 		while (continued)
@@ -90,7 +92,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 						if ((i > 0) && (i < (npX - 1)))
 						{
 							left = u0[idx - npY * npZ];
-							right = u0[idx + npY * npZ]; 
+							right = u0[idx + npY * npZ];
 						}
 						else if (i == 0)
 							right = u0[idx + npY * npZ];
@@ -127,7 +129,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 					}
 				}
 			}
-			
+
 			#pragma omp single
 			{
 				t_block_end = MPI_Wtime();
@@ -136,7 +138,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 				// Use MPI_LAND to check if any process has set 'continued' to 0
 				MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
 			}
-			
+
 			if (continued == 0)
 				break;
 
@@ -150,7 +152,6 @@ unsigned int mdf_heat(double *__restrict__ u0,
 
 					// Receive the content of the first point of the slice from the left neighbour
 					MPI_Irecv(&u1[0], npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
-
 				}
 
 				if (myrank < (size - 1))
@@ -170,14 +171,14 @@ unsigned int mdf_heat(double *__restrict__ u0,
 					MPI_Wait(&request_right, &status);
 
 				// Swap the pointers (the next instant of time is now the current time)
-				double *temp = u0;
+				temp = u0;
 				u0 = u1;
 				u1 = temp;
 			}
 		}
 	}
 
-	printf("Process %d: Computation block time: %f seconds\n", myrank, total_time);
+	printf("Process %d: Computation time: %f seconds\n", myrank, total_time);
 
 	return steps;
 }
@@ -189,7 +190,7 @@ int main(int ac, char **av)
 	double *u1;
 
 	// Loop indexes
-	unsigned int i, j;
+	unsigned int i;
 
 	// Simulation parameters
 	double deltaT = 0.01;
@@ -197,16 +198,12 @@ int main(int ac, char **av)
 	double sizeX = 1.0f;
 	double sizeY = 1.0f;
 	double sizeZ = 1.0f;
-
-	double *aux0, *aux1;
-
 	unsigned int npX, npY, npZ;
 
 	// MPI variables
 	int my_global_rank;
-	MPI_Status status;
 
-	// Subcommunicator for the MPI processes that will compute the points
+	// Subcommunicators
 	MPI_Comm compute_comm;
 	int myrank, size;
 	int is_computing_proc = 0;
@@ -223,7 +220,7 @@ int main(int ac, char **av)
 	MPI_Init(&ac, &av);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_global_rank);
 
-	// Input processing (common for all MPI processes)
+	// Input processing
 	if (ac > 1)
 	{
 		deltaH = atof(av[1]);
@@ -254,7 +251,7 @@ int main(int ac, char **av)
 		points_per_slice = npX / size; // Provisional value
 
 		/** Some slices might have more points than others if npX cannot be exactly divided by
-		 * the number of MPI processes, so we will implement the simplest approach for a load
+		 * the number of MPI processes, so we will implement the simplest approach for a static load
 		 * balancing algorithm:
 		 *  	Distribute the remaining points among the first MPI processes.
 		 *  	Assuming equal workload for each point and equal hardware resources, this would
@@ -300,6 +297,7 @@ int main(int ac, char **av)
 		// Collect the number of steps from all MPI processes and get the maximum value
 		MPI_Reduce(&steps, &max_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, compute_comm);
 
+		// Save the execution time of the parallel region
 		end_time = MPI_Wtime();
 		execution_time = end_time - start_time;
 
@@ -316,7 +314,6 @@ int main(int ac, char **av)
 	}
 
 	// Free the subcommunicators
-	// Processes that do not compute points will also terminate their own subcommunicator
 	MPI_Comm_free(&compute_comm);
 
 	MPI_Finalize();

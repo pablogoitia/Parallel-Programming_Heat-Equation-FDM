@@ -1,6 +1,7 @@
 /*****************************************************************
  * Author: Pablo Goitia <pablo.goitia@alumnos.unican.es>
  * Project: Finite-Difference Approximation to the Heat Equation
+ * Version: MPI + OpenMP + Load Balancing [Final]
  * Date: Mar-2025
  *
  * Usage: ./fdm [deltaH]
@@ -73,7 +74,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	double t_block_start, t_block_end, total_time = 0.0f;
 
 	#pragma omp parallel \
-	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, temp, status, request_left, request_right) \
+	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, temp, status, request_left, request_right, t_block_start, t_block_end, total_time) \
 	private(i, j, k, idx, left, right, up, down, top, bottom, err, maxErr)
 	{
 		while (continued)
@@ -329,6 +330,7 @@ int main(int ac, char **av)
 		// Collect the number of steps from all MPI processes and get the maximum value
 		MPI_Reduce(&steps, &max_steps, 1, MPI_UNSIGNED, MPI_MAX, 0, compute_comm);
 
+		// Save the execution time of the parallel region
 		end_time = MPI_Wtime();
 		execution_time = end_time - start_time;
 

@@ -49,7 +49,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 {
 	register double alpha = deltaT / (deltaH * deltaH);
 	int continued = 1;
-	register unsigned int steps = 0;
+	register unsigned int steps = 1;
 
 	// Loop indexes
 	unsigned int i, j, k, idx;
@@ -70,21 +70,12 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	MPI_Status status;
 	MPI_Request request_left, request_right;
 
-	// Buffer for MPI communication
-	double t_block_start, t_block_end, total_time = 0.0f;
-
 	#pragma omp parallel \
-	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, temp, status, request_left, request_right, t_block_start, t_block_end, total_time) \
+	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, temp, status, request_left, request_right) \
 	private(i, j, k, idx, left, right, up, down, top, bottom, err, maxErr)
 	{
-		while (continued)
+		while (1)
 		{
-			#pragma omp single
-			{
-				steps++;
-				t_block_start = MPI_Wtime();
-			}
-
 			err = 0.0f;
 			maxErr = 0.0f;
 
@@ -147,9 +138,6 @@ unsigned int mdf_heat(double *__restrict__ u0,
 
 			#pragma omp single
 			{
-				t_block_end = MPI_Wtime();
-				total_time += t_block_end - t_block_start;
-
 				// Use MPI_LAND to check if any process has set 'continued' to 0
 				MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
 			}
@@ -189,11 +177,12 @@ unsigned int mdf_heat(double *__restrict__ u0,
 				temp = u0;
 				u0 = u1;
 				u1 = temp;
+
+				// Increase the number of steps
+				steps++;
 			}
 		}
 	}
-
-	printf("Process %d: Computation time: %f seconds\n", myrank, total_time);
 
 	return steps;
 }

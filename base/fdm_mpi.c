@@ -5,7 +5,7 @@
  * Date: Mar-2025
  *
  * Usage: ./fdm [deltaH]
- * Compile: mpicc -o fdm fdm.c
+ * Compile: mpicc -o fdm_mpi fdm_mpi.c
  *****************************************************************/
 
 #include <stdlib.h>

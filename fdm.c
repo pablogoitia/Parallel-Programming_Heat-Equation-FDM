@@ -16,9 +16,10 @@
 #include <mpi.h>
 #include <omp.h>
 
-#define TYPES_OF_NODES 	2
+#define TYPES_OF_NODES 2
 
-typedef struct _node {
+typedef struct _node
+{
 	char root_name[10];
 	int num_nodes;
 	int cores_per_node;
@@ -26,8 +27,8 @@ typedef struct _node {
 } node;
 
 static node nodes[TYPES_OF_NODES] = {
-	{"n16-8", 4, 6, 4.8},	// Fast nodes
-	{"n16-9", 4, 4, 3.4}	// Slower nodes
+	{"n16-8", 4, 6, 4.8}, // Fast nodes
+	{"n16-9", 4, 4, 3.4}  // Slower nodes
 };
 
 unsigned int mdf_heat(double *__restrict__ u0,
@@ -45,7 +46,6 @@ unsigned int mdf_heat(double *__restrict__ u0,
 					  const unsigned int first_point,
 					  const unsigned int last_point)
 {
-
 	register double alpha = deltaT / (deltaH * deltaH);
 	int continued = 1;
 	register unsigned int steps = 0;
@@ -106,7 +106,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 						if ((i > 0) && (i < (npX - 1)))
 						{
 							left = u0[idx - npY * npZ];
-							right = u0[idx + npY * npZ]; 
+							right = u0[idx + npY * npZ];
 						}
 						else if (i == 0)
 							right = u0[idx + npY * npZ];
@@ -143,7 +143,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 					}
 				}
 			}
-			
+
 			#pragma omp single
 			{
 				t_block_end = MPI_Wtime();
@@ -152,7 +152,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 				// Use MPI_LAND to check if any process has set 'continued' to 0
 				MPI_Allreduce(&continued, &continued, 1, MPI_INT, MPI_LAND, compute_comm);
 			}
-			
+
 			if (continued == 0)
 				break;
 
@@ -166,7 +166,6 @@ unsigned int mdf_heat(double *__restrict__ u0,
 
 					// Receive the content of the first point of the slice from the left neighbour
 					MPI_Irecv(&u1[0], npY * npZ, MPI_DOUBLE, myrank - 1, steps, compute_comm, &request_left);
-
 				}
 
 				if (myrank < (size - 1))
@@ -193,7 +192,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 		}
 	}
 
-	printf("Process %d: Computation block time: %f seconds\n", myrank, total_time);
+	printf("Process %d: Computation time: %f seconds\n", myrank, total_time);
 
 	return steps;
 }
@@ -213,14 +212,13 @@ int main(int ac, char **av)
 	double sizeX = 1.0f;
 	double sizeY = 1.0f;
 	double sizeZ = 1.0f;
-
 	unsigned int npX, npY, npZ;
 
 	// MPI variables
 	int my_global_rank;
 	node mynode;
 
-	// Subcommunicator for the MPI processes that will compute the points
+	// Subcommunicators
 	MPI_Comm compute_comm;
 	int myrank, size;
 	int is_computing_proc = 0;
@@ -237,7 +235,7 @@ int main(int ac, char **av)
 	MPI_Init(&ac, &av);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_global_rank);
 
-	// Input processing (common for all MPI processes)
+	// Input processing
 	if (ac > 1)
 	{
 		deltaH = atof(av[1]);
@@ -271,7 +269,7 @@ int main(int ac, char **av)
 	npZ = (unsigned int)(sizeZ / deltaH);
 
 	// The X axis is divided into a fair number of slices depending on the power of the cores
-	double W = 0;	// Total capacity of the system (total frequency)
+	double W = 0; // Total capacity (frequency) of the system
 
 	for (i = 0; i < TYPES_OF_NODES; i++)
 		W += nodes[i].cores_per_node * nodes[i].frequency;
@@ -294,7 +292,7 @@ int main(int ac, char **av)
 	{
 		/* Calculate the first point for each MPI process based on their processing power.
 		 * We need to sum the points assigned to previous processes. */
-		int* global_points = malloc(size * sizeof(int));
+		int *global_points = malloc(size * sizeof(int));
 
 		// Get the number of points assigned to each MPI process
 		MPI_Allgather(&points_per_slice, 1, MPI_INT, global_points, 1, MPI_INT, compute_comm);
@@ -347,7 +345,6 @@ int main(int ac, char **av)
 	}
 
 	// Free the subcommunicators
-	// Processes that do not compute points will also terminate their own subcommunicator
 	MPI_Comm_free(&compute_comm);
 
 	MPI_Finalize();

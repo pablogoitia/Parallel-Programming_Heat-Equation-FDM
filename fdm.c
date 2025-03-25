@@ -14,6 +14,23 @@
 #include <math.h>
 #include <mpi.h>
 #include <omp.h>
+#include <unistd.h>
+
+#define TYPES_OF_NODES 	2
+#define MAX_FREQ 		4.8
+#define MIN_FREQ 		3.4
+
+typedef struct _node {
+	char root_name[10];
+	int num_nodes;
+	int cores_per_node;
+	float frequency;
+} node;
+
+static node nodes[TYPES_OF_NODES] = {
+	{"n16-8", 4, 6, 4.8},	// Fast nodes
+	{"n16-9", 4, 4, 3.4}	// Slower nodes
+};
 
 unsigned int mdf_heat(double *__restrict__ u0,
 					  double *__restrict__ u1,
@@ -206,6 +223,7 @@ int main(int ac, char **av)
 	// MPI variables
 	int my_global_rank;
 	MPI_Status status;
+	node mynode;
 
 	// Subcommunicator for the MPI processes that will compute the points
 	MPI_Comm compute_comm;
@@ -237,47 +255,65 @@ int main(int ac, char **av)
 		}
 	}
 
+	// Determine the node where the process is running
+	char processor_name[MPI_MAX_PROCESSOR_NAME];
+	int name_len;
+	MPI_Get_processor_name(processor_name, &name_len);
+
+	// Search the node in the list of nodes
+	for (i = 0; i < TYPES_OF_NODES; i++)
+	{
+		if (strncmp(processor_name, nodes[i].root_name, strlen(nodes[i].root_name)) == 0)
+		{
+			mynode = nodes[i];
+			break;
+		}
+	}
+
 	// Calculate the number of points in each axis
 	npX = (unsigned int)(sizeX / deltaH);
 	npY = (unsigned int)(sizeY / deltaH);
 	npZ = (unsigned int)(sizeZ / deltaH);
 
+	// The X axis is divided into a fair number of slices depending on the power of the cores
+	double node_capacity = 0;
+	double W = 0;	// Total capacity of the system (total frequency)
+
+	for (int i = 0; i < TYPES_OF_NODES; i++)
+		W += nodes[i].cores_per_node * nodes[i].frequency;
+
+	double node_capacity = mynode.cores_per_node * mynode.frequency;
+
+	// Workload fractions per node
+	double fraction = node_capacity / W;
+
+	// Point assignment per process
+	points_per_slice = floor(npX * fraction);
+
 	// Discriminate the MPI processes that will compute the points and the remaining ones
-	is_computing_proc = (my_global_rank < npX) ? 1 : 0;
+	is_computing_proc = (points_per_slice > 0) ? 1 : 0;
 	MPI_Comm_split(MPI_COMM_WORLD, is_computing_proc, my_global_rank, &compute_comm);
 	MPI_Comm_rank(compute_comm, &myrank);
 	MPI_Comm_size(compute_comm, &size);
 
 	if (is_computing_proc)
 	{
-		/** The three-dimensional space will be divided into a number of slices across the X axis
-		 * matching the number of MPI processes, and which are made up of a set of points. */
-		points_per_slice = npX / size; // Provisional value
+		/* Calculate the first point for each MPI process based on their processing power.
+		 * We need to sum the points assigned to previous processes. */
+		int* global_points = malloc(size * sizeof(int));
 
-		/** Some slices might have more points than others if npX cannot be exactly divided by
-		 * the number of MPI processes, so we will implement the simplest approach for a load
-		 * balancing algorithm:
-		 *  	Distribute the remaining points among the first MPI processes.
-		 *  	Assuming equal workload for each point and equal hardware resources, this would
-		 *  	be the fairest algorithm.
-		 *
-		 *  Obviously, those conditions are not frequently met, so this algorithm is not
-		 *  the best one, but it will be enough for this first implementation.
-		 */
-		remaining_points = npX % size;
+		// Get the number of points assigned to each MPI process
+		MPI_Allgather(&points_per_slice, 1, MPI_INT, global_points, 1, MPI_INT, compute_comm);
 
-		// Calculate the definitive number of points for each MPI process
-		if (myrank < remaining_points)
-			points_per_slice++;
-
-		/** Calculate the first and last point in the slice for each MPI process,
-		 * considering that some processes will have one more point. */
+		// Calculate the first point for this MPI process
 		first_point = 0;
 		for (i = 0; i < myrank; i++)
-			first_point += (i < npX % size) ? (points_per_slice + 1) : points_per_slice;
+			first_point += global_points[i];
+
+		// Calculate the last point for this MPI process
 		last_point = first_point + points_per_slice - 1;
 
-		// Processes print the number of points in each axis
+		// Processes print the number of points to compute
 		printf("I am process %d of %d. points_per_slice=%d of %d. first_point=%d, last_point=%d\n",
 			   myrank + 1, size, points_per_slice, npX, first_point, last_point);
 
@@ -311,6 +347,11 @@ int main(int ac, char **av)
 		if (myrank == 0)
 			printf("Done! in %u steps\nExecution time: %f seconds\n", max_steps, max_time);
 
+			if (myrank == 0)
+			{
+				printf("Frequency of cores in node: %d\n", get_frequency_of_cores_in_node());
+			}
+
 		// Free memory
 		free(u0);
 		free(u1);
@@ -323,4 +364,16 @@ int main(int ac, char **av)
 	MPI_Finalize();
 
 	return EXIT_SUCCESS;
+}
+int get_frequency_of_cores_in_node() {
+	FILE *fp;
+	int freq = 0;
+	
+	fp = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
+	if (fp != NULL) {
+		fscanf(fp, "%d", &freq);
+		fclose(fp);
+		return freq / 1000; // Convert from KHz to MHz
+	}
+	return -1; // Return -1 if unable to read frequency
 }

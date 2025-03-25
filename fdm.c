@@ -1,11 +1,11 @@
 /*****************************************************************
-/* Author: Pablo Goitia <pablo.goitia@alumnos.unican.es>
-/* Project: Finite-Difference Approximation to the Heat Equation
-/* Date: Mar-2025
-/*
-/* Usage: ./fdm [deltaH]
-/* Compile: mpicc -o fdm fdm.c -lm -fopenmp
-/*****************************************************************/
+ * Author: Pablo Goitia <pablo.goitia@alumnos.unican.es>
+ * Project: Finite-Difference Approximation to the Heat Equation
+ * Date: Mar-2025
+ *
+ * Usage: ./fdm [deltaH]
+ * Compile: mpicc -o fdm fdm.c -lm -fopenmp
+ *****************************************************************/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -15,11 +15,8 @@
 #include <math.h>
 #include <mpi.h>
 #include <omp.h>
-#include <unistd.h>
 
 #define TYPES_OF_NODES 	2
-#define MAX_FREQ 		4.8
-#define MIN_FREQ 		3.4
 
 typedef struct _node {
 	char root_name[10];
@@ -65,7 +62,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	register double top;
 	register double bottom;
 
-	double ***ptr;
+	double *temp;
 	double err, maxErr;
 
 	// MPI comms handling variables
@@ -76,7 +73,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 	double t_block_start, t_block_end, total_time = 0.0f;
 
 	#pragma omp parallel \
-	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, ptr, status, request_left, request_right) \
+	shared(u0, u1, inErr, boundaries, compute_comm, myrank, size, first_point, last_point, alpha, continued, steps, points_per_slice, temp, status, request_left, request_right) \
 	private(i, j, k, idx, left, right, up, down, top, bottom, err, maxErr)
 	{
 		while (continued)
@@ -189,7 +186,7 @@ unsigned int mdf_heat(double *__restrict__ u0,
 					MPI_Wait(&request_right, &status);
 
 				// Swap the pointers (the next instant of time is now the current time)
-				double *temp = u0;
+				temp = u0;
 				u0 = u1;
 				u1 = temp;
 			}
@@ -208,7 +205,7 @@ int main(int ac, char **av)
 	double *u1;
 
 	// Loop indexes
-	unsigned int i, j;
+	unsigned int i;
 
 	// Simulation parameters
 	double deltaT = 0.01;
@@ -217,13 +214,10 @@ int main(int ac, char **av)
 	double sizeY = 1.0f;
 	double sizeZ = 1.0f;
 
-	double *aux0, *aux1;
-
 	unsigned int npX, npY, npZ;
 
 	// MPI variables
 	int my_global_rank;
-	MPI_Status status;
 	node mynode;
 
 	// Subcommunicator for the MPI processes that will compute the points
@@ -232,7 +226,7 @@ int main(int ac, char **av)
 	int is_computing_proc = 0;
 
 	// Variables for the MPI processes
-	unsigned int points_per_slice, remaining_points;
+	unsigned int points_per_slice;
 	unsigned int first_point, last_point;
 
 	// Variables for results
@@ -279,7 +273,7 @@ int main(int ac, char **av)
 	// The X axis is divided into a fair number of slices depending on the power of the cores
 	double W = 0;	// Total capacity of the system (total frequency)
 
-	for (int i = 0; i < TYPES_OF_NODES; i++)
+	for (i = 0; i < TYPES_OF_NODES; i++)
 		W += nodes[i].cores_per_node * nodes[i].frequency;
 
 	double node_capacity = mynode.cores_per_node * mynode.frequency;
@@ -359,16 +353,4 @@ int main(int ac, char **av)
 	MPI_Finalize();
 
 	return EXIT_SUCCESS;
-}
-int get_frequency_of_cores_in_node() {
-	FILE *fp;
-	int freq = 0;
-	
-	fp = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
-	if (fp != NULL) {
-		fscanf(fp, "%d", &freq);
-		fclose(fp);
-		return freq / 1000; // Convert from KHz to MHz
-	}
-	return -1; // Return -1 if unable to read frequency
 }

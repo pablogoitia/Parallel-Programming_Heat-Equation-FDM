@@ -160,8 +160,8 @@ int main (int ac, char **av){
 
   
   clock_gettime(CLOCK_MONOTONIC, &end_main);
-  double execution_time = (end_main.tv_sec - start_main.tv_sec) + (end_main.tv_nsec - start_main.tv_nsec) / 1e9;
-  printf("Total execution time: %f seconds\n", execution_time);
+  double execution_main = (end_main.tv_sec - start_main.tv_sec) + (end_main.tv_nsec - start_main.tv_nsec) / 1e9;
+  printf("Total execution time: %f seconds\n", execution_main);
   
   
   return EXIT_SUCCESS;

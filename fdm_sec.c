@@ -31,15 +31,6 @@ void mdf_heat(double ***  __restrict__ u0,
     register int continued = 1;
     register unsigned int steps = 0;
 
-    // Print the y-z slice of the first point of the slice
-    // for (unsigned int i = 0; i < npY; i++)
-    // {
-    //   for (unsigned int j = 0; j < npZ; j++)
-    //     printf("%.4f ", u0[j][i][0]);
-    //   printf("\n");
-    // }
-    // printf("\n");
-
     while (continued){
       steps++;
               for (unsigned int i = 0; i < npZ; i++){
@@ -70,31 +61,10 @@ void mdf_heat(double ***  __restrict__ u0,
                       }else if (i == 0) bottom = u0[i+1][j][k];
                       else top = u0[i-1][j][k];
                       
-                      
-                      u1[i][j][k] =  alpha * ( top + bottom + up + down + left + right  - (6.0f * u0[i][j][k] )) + u0[i][j][k];
-//printf ("u1[%d][%d][%d] = %f\n", i,j,k,u1[i][j][k]);
-    
-                  
+                      u1[i][j][k] =  alpha * ( top + bottom + up + down + left + right  - (6.0f * u0[i][j][k] )) + u0[i][j][k];                 
                   }
                 }
-              } 
-
-              // Print the y-z slice of the first point of the slice
-              // if (steps == 3)
-              // {
-              //   for (unsigned int k = 0; k < npX; k++)
-              //   {
-              //     printf("Slice #%d, step %d\n", k, steps);
-              //     for (unsigned int i = 0; i < npZ; i++)
-              //     {
-              //       for (unsigned int j = 0; j < npY; j++)
-              //         printf("%.4f ", u1[i][j][k]);
-              //       printf("\n");
-              //     }
-              //     printf("\n");
-              //   }
-              //   sleep(100);
-              // }
+              }
               
               double ***ptr = u0;
               u0 = u1;
@@ -113,8 +83,6 @@ void mdf_heat(double ***  __restrict__ u0,
                   }
                 }
               }
-              // printf ("err = %.4g > inErr = %.4g\n", err, inErr);
-              // sleep(1);
     }
   
     fprintf(stdout, "Done! in %u steps\n", steps);
@@ -122,6 +90,9 @@ void mdf_heat(double ***  __restrict__ u0,
                 
 }
 int main (int ac, char **av){
+  struct timespec start_main, end_main;
+  clock_gettime(CLOCK_MONOTONIC, &start_main);
+
   double ***u0;
   double ***u1;
 
@@ -169,8 +140,7 @@ int main (int ac, char **av){
   
   clock_gettime(CLOCK_MONOTONIC, &end);
   double execution_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-  printf("Execution time: %f seconds\n", execution_time);
-  //mdf_print(u1,  npX, npY, npZ);
+  printf("Execution time (parallelizable region): %f seconds\n", execution_time);
   
   //Free memory
   for (unsigned int i = 0; i < npZ; i++){
@@ -187,6 +157,11 @@ int main (int ac, char **av){
   
   free(u0);
   free(u1);
+
+  
+  clock_gettime(CLOCK_MONOTONIC, &end_main);
+  double execution_time = (end_main.tv_sec - start_main.tv_sec) + (end_main.tv_nsec - start_main.tv_nsec) / 1e9;
+  printf("Total execution time: %f seconds\n", execution_time);
   
   
   return EXIT_SUCCESS;

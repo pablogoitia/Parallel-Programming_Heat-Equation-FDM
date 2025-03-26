@@ -3,9 +3,9 @@
 #----------------------------------------------------
 # FDM MPI job script
 #----------------------------------------------------
-#SBATCH -J fdm_lb           # Job name
-#SBATCH -o fdm_lb.out       # Name of stdout output file
-#SBATCH -e fdm_lb.err       # Name of stderr output file
+#SBATCH -J fdm_omp          # Job name
+#SBATCH -o fdm_omp.out      # Name of stdout output file
+#SBATCH -e fdm_omp.err      # Name of stderr output file
 #SBATCH -N 8                # Total # of nodes
 #SBATCH --cpus-per-task 4   # Cores per task requested
 #SBATCH -n 8                # Total # of mpi tasks

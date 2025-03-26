@@ -15,7 +15,7 @@
 # Probably it will not finish, but we will let it compute as much as it can
 for n in 4 8 16 32 64 128 256 512 1024 2048 4096
 do
-    value=$((1/$n))
+    value=$(echo "1/$n" | bc -l)
     echo "Running with value: $value"
     srun ./fdm_sec $value
 done

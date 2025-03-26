@@ -12,5 +12,5 @@
 #SBATCH -t 1:00:00          # Run time (hh:mm:ss) - 1 hour
 #SBATCH -p lgpu             # Partition to submit to
 
-prun ./fdm_mpi 0.002708442
+prun ./fdm_mpi 0.01083377
 echo "done"                 # Write this message on the output file when finished

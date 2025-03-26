@@ -6,7 +6,7 @@
 #SBATCH -J fdm_12          # Job name
 #SBATCH -o fdm_12.out      # Name of stdout output file(%j expands to jobId)
 #SBATCH -e fdm_12.err      # Name of stderr output file(%j expands to jobId)
-#SBATCH -N 2                # Total # of nodes
+#SBATCH -N 3                # Total # of nodes
 #SBATCH --cpus-per-task 1   # Cores per task requested
 #SBATCH -n 12                # Total # of mpi tasks
 #SBATCH -t 1:00:00          # Run time (hh:mm:ss) - 1 hour

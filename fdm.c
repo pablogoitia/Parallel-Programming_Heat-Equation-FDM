@@ -189,6 +189,9 @@ unsigned int mdf_heat(double *__restrict__ u0,
 
 int main(int ac, char **av)
 {
+	double start_main, end_main, execution_main;
+	start_main = MPI_Wtime();
+
 	// Data structures
 	double *u0;
 	double *u1;
@@ -339,6 +342,10 @@ int main(int ac, char **av)
 	MPI_Comm_free(&compute_comm);
 
 	MPI_Finalize();
+
+	end_main = MPI_Wtime();
+	execution_main = end_main - start_main;
+	printf("Main execution time: %f seconds\n", execution_main);
 
 	return EXIT_SUCCESS;
 }

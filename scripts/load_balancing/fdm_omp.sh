@@ -14,7 +14,8 @@
 #SBATCH --nodelist=n16-82,n16-83,n16-92,n16-93
 #SBATCH --exclusive
 
+
 export OMP_NUM_THREADS=4
 
 prun ./fdm_omp 0.001953125  # Run the program with 1/512
-echo "done"                  # Write this message on the output file when finished
+echo "done"                 # Write this message on the output file when finished

@@ -17,4 +17,4 @@
 export OMP_NUM_THREADS=4
 
 prun ./fdm 0.001953125      # Run the program with 1/512
-echo "done"                  # Write this message on the output file when finished
+echo "done"                 # Write this message on the output file when finished

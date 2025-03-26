@@ -1,0 +1,81 @@
+Running with value: 0.015625
+p(64, 64, 64)
+Done! in 118 steps
+Execution time (parallelizable region): 0.390968 seconds
+Total execution time: 0.392049 seconds
+Running with value: 0.012401571
+p(80, 80, 80)
+Done! in 110 steps
+Execution time (parallelizable region): 0.761511 seconds
+Total execution time: 0.763549 seconds
+Running with value: 0.01083377
+p(92, 92, 92)
+Done! in 105 steps
+Execution time (parallelizable region): 0.742865 seconds
+Total execution time: 0.745832 seconds
+Running with value: 0.009843133
+p(101, 101, 101)
+Done! in 103 steps
+Execution time (parallelizable region): 0.953039 seconds
+Total execution time: 0.956864 seconds
+Running with value: 0.009137555
+p(109, 109, 109)
+Done! in 101 steps
+Execution time (parallelizable region): 2.094449 seconds
+Total execution time: 2.099307 seconds
+Running with value: 0.008598769
+p(116, 116, 116)
+Done! in 99 steps
+Execution time (parallelizable region): 1.408709 seconds
+Total execution time: 1.414602 seconds
+Running with value: 0.008168093
+p(122, 122, 122)
+Done! in 98 steps
+Execution time (parallelizable region): 3.055756 seconds
+Total execution time: 3.062507 seconds
+Running with value: 0.0078125
+p(128, 128, 128)
+Done! in 96 steps
+Execution time (parallelizable region): 3.589287 seconds
+Total execution time: 3.597203 seconds
+Running with value: 0.007511717
+p(133, 133, 133)
+Done! in 95 steps
+Execution time (parallelizable region): 2.094281 seconds
+Total execution time: 2.103116 seconds
+Running with value: 0.007252483
+p(137, 137, 137)
+Done! in 95 steps
+Execution time (parallelizable region): 4.567547 seconds
+Total execution time: 4.577151 seconds
+Running with value: 0.007025692
+p(142, 142, 142)
+Done! in 94 steps
+Execution time (parallelizable region): 5.168246 seconds
+Total execution time: 5.178835 seconds
+Running with value: 0.006824847
+p(146, 146, 146)
+Done! in 93 steps
+Execution time (parallelizable region): 5.680414 seconds
+Total execution time: 5.691842 seconds
+Running with value: 0.006645162
+p(150, 150, 150)
+Done! in 93 steps
+Execution time (parallelizable region): 6.273653 seconds
+Total execution time: 6.286042 seconds
+Running with value: 0.00648302
+p(154, 154, 154)
+Done! in 92 steps
+Execution time (parallelizable region): 6.849728 seconds
+Total execution time: 6.863062 seconds
+Running with value: 0.006335627
+p(157, 157, 157)
+Done! in 91 steps
+Execution time (parallelizable region): 3.288577 seconds
+Total execution time: 3.302908 seconds
+Running with value: 0.006200785
+p(161, 161, 161)
+Done! in 91 steps
+Execution time (parallelizable region): 7.983605 seconds
+Total execution time: 7.998763 seconds
+done

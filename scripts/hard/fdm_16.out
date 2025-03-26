@@ -1,0 +1,38 @@
+[prun] Master compute host = n16-80
+[prun] Resource manager = slurm
+[prun] Launch cmd = mpirun ./fdm_mpi 0.00390625 (family=openmpi4)
+I am process 1 of 16. points_per_slice=16 of 256. first_point=0, last_point=15
+I am process 2 of 16. points_per_slice=16 of 256. first_point=16, last_point=31
+I am process 3 of 16. points_per_slice=16 of 256. first_point=32, last_point=47
+I am process 4 of 16. points_per_slice=16 of 256. first_point=48, last_point=63
+I am process 5 of 16. points_per_slice=16 of 256. first_point=64, last_point=79
+I am process 9 of 16. points_per_slice=16 of 256. first_point=128, last_point=143
+I am process 6 of 16. points_per_slice=16 of 256. first_point=80, last_point=95
+I am process 10 of 16. points_per_slice=16 of 256. first_point=144, last_point=159
+I am process 13 of 16. points_per_slice=16 of 256. first_point=192, last_point=207
+I am process 7 of 16. points_per_slice=16 of 256. first_point=96, last_point=111
+I am process 12 of 16. points_per_slice=16 of 256. first_point=176, last_point=191
+I am process 14 of 16. points_per_slice=16 of 256. first_point=208, last_point=223
+I am process 8 of 16. points_per_slice=16 of 256. first_point=112, last_point=127
+I am process 11 of 16. points_per_slice=16 of 256. first_point=160, last_point=175
+I am process 15 of 16. points_per_slice=16 of 256. first_point=224, last_point=239
+I am process 16 of 16. points_per_slice=16 of 256. first_point=240, last_point=255
+Done! in 82 steps
+Execution time: 1.519557 seconds
+Main execution time: 4.934641 seconds
+Main execution time: 4.934730 seconds
+Main execution time: 4.934819 seconds
+Main execution time: 4.934704 seconds
+Main execution time: 5.015500 seconds
+Main execution time: 5.090136 seconds
+Main execution time: 5.054784 seconds
+Main execution time: 5.015519 seconds
+Main execution time: 5.090134 seconds
+Main execution time: 5.054775 seconds
+Main execution time: 5.015398 seconds
+Main execution time: 5.090023 seconds
+Main execution time: 5.054888 seconds
+Main execution time: 5.015623 seconds
+Main execution time: 5.089917 seconds
+Main execution time: 5.054708 seconds
+done

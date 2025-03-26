@@ -1,0 +1,8 @@
+[prun] Master compute host = n16-80
+[prun] Resource manager = slurm
+[prun] Launch cmd = mpirun ./fdm_mpi 0.015625 (family=openmpi4)
+I am process 1 of 1. points_per_slice=64 of 64. first_point=0, last_point=63
+Done! in 118 steps
+Execution time: 0.308167 seconds
+Main execution time: 2.431486 seconds
+done

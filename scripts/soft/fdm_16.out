@@ -1,0 +1,38 @@
+[prun] Master compute host = n16-80
+[prun] Resource manager = slurm
+[prun] Launch cmd = mpirun ./fdm_mpi 0.006200785 (family=openmpi4)
+I am process 1 of 16. points_per_slice=11 of 161. first_point=0, last_point=10
+I am process 2 of 16. points_per_slice=10 of 161. first_point=11, last_point=20
+I am process 3 of 16. points_per_slice=10 of 161. first_point=21, last_point=30
+I am process 4 of 16. points_per_slice=10 of 161. first_point=31, last_point=40
+I am process 5 of 16. points_per_slice=10 of 161. first_point=41, last_point=50
+I am process 13 of 16. points_per_slice=10 of 161. first_point=121, last_point=130
+I am process 9 of 16. points_per_slice=10 of 161. first_point=81, last_point=90
+I am process 6 of 16. points_per_slice=10 of 161. first_point=51, last_point=60
+I am process 14 of 16. points_per_slice=10 of 161. first_point=131, last_point=140
+I am process 10 of 16. points_per_slice=10 of 161. first_point=91, last_point=100
+I am process 7 of 16. points_per_slice=10 of 161. first_point=61, last_point=70
+I am process 15 of 16. points_per_slice=10 of 161. first_point=141, last_point=150
+I am process 11 of 16. points_per_slice=10 of 161. first_point=101, last_point=110
+I am process 8 of 16. points_per_slice=10 of 161. first_point=71, last_point=80
+I am process 16 of 16. points_per_slice=10 of 161. first_point=151, last_point=160
+I am process 12 of 16. points_per_slice=10 of 161. first_point=111, last_point=120
+Done! in 91 steps
+Execution time: 0.955563 seconds
+Main execution time: 4.463325 seconds
+Main execution time: 4.463394 seconds
+Main execution time: 4.463328 seconds
+Main execution time: 4.463483 seconds
+Main execution time: 4.372256 seconds
+Main execution time: 4.376896 seconds
+Main execution time: 4.372377 seconds
+Main execution time: 4.376877 seconds
+Main execution time: 4.372314 seconds
+Main execution time: 4.376968 seconds
+Main execution time: 4.372332 seconds
+Main execution time: 4.377064 seconds
+Main execution time: 4.545128 seconds
+Main execution time: 4.545417 seconds
+Main execution time: 4.545533 seconds
+Main execution time: 4.545315 seconds
+done

@@ -1,0 +1,36 @@
+[prun] Master compute host = n16-80
+[prun] Resource manager = slurm
+[prun] Launch cmd = mpirun ./fdm_mpi 0.006335627 (family=openmpi4)
+I am process 1 of 15. points_per_slice=11 of 157. first_point=0, last_point=10
+I am process 2 of 15. points_per_slice=11 of 157. first_point=12, last_point=22
+I am process 3 of 15. points_per_slice=11 of 157. first_point=24, last_point=34
+I am process 4 of 15. points_per_slice=11 of 157. first_point=36, last_point=46
+I am process 5 of 15. points_per_slice=11 of 157. first_point=48, last_point=58
+I am process 13 of 15. points_per_slice=10 of 157. first_point=127, last_point=136
+I am process 9 of 15. points_per_slice=10 of 157. first_point=87, last_point=96
+I am process 6 of 15. points_per_slice=11 of 157. first_point=60, last_point=70
+I am process 14 of 15. points_per_slice=10 of 157. first_point=137, last_point=146
+I am process 10 of 15. points_per_slice=10 of 157. first_point=97, last_point=106
+I am process 7 of 15. points_per_slice=11 of 157. first_point=72, last_point=82
+I am process 15 of 15. points_per_slice=10 of 157. first_point=147, last_point=156
+I am process 11 of 15. points_per_slice=10 of 157. first_point=107, last_point=116
+I am process 8 of 15. points_per_slice=10 of 157. first_point=77, last_point=86
+I am process 12 of 15. points_per_slice=10 of 157. first_point=117, last_point=126
+Done! in 91 steps
+Execution time: 0.545189 seconds
+Main execution time: 4.168582 seconds
+Main execution time: 4.168425 seconds
+Main execution time: 4.168527 seconds
+Main execution time: 4.168540 seconds
+Main execution time: 3.943077 seconds
+Main execution time: 3.943070 seconds
+Main execution time: 3.943182 seconds
+Main execution time: 4.031648 seconds
+Main execution time: 4.031645 seconds
+Main execution time: 4.031586 seconds
+Main execution time: 4.031631 seconds
+Main execution time: 4.023825 seconds
+Main execution time: 4.024044 seconds
+Main execution time: 4.023947 seconds
+Main execution time: 4.023850 seconds
+done

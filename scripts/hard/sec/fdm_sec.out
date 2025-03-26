@@ -1,0 +1,42 @@
+Running with value: 0.25
+p(4, 4, 4)
+Done! in 178 steps
+Execution time (parallelizable region): 0.000101 seconds
+Total execution time: 0.000138 seconds
+Running with value: 0.125
+p(8, 8, 8)
+Done! in 407 steps
+Execution time (parallelizable region): 0.001922 seconds
+Total execution time: 0.001961 seconds
+Running with value: 0.0625
+p(16, 16, 16)
+Done! in 215 steps
+Execution time (parallelizable region): 0.008943 seconds
+Total execution time: 0.008999 seconds
+Running with value: 0.03125
+p(32, 32, 32)
+Done! in 152 steps
+Execution time (parallelizable region): 0.047447 seconds
+Total execution time: 0.047629 seconds
+Running with value: 0.015625
+p(64, 64, 64)
+Done! in 118 steps
+Execution time (parallelizable region): 0.388077 seconds
+Total execution time: 0.389171 seconds
+Running with value: 0.0078125
+p(128, 128, 128)
+Done! in 96 steps
+Execution time (parallelizable region): 3.599533 seconds
+Total execution time: 3.607397 seconds
+Running with value: 0.00390625
+p(256, 256, 256)
+Done! in 82 steps
+Execution time (parallelizable region): 13.165466 seconds
+Total execution time: 13.224018 seconds
+Running with value: 0.001953125
+p(512, 512, 512)
+Done! in 71 steps
+Execution time (parallelizable region): 439.216009 seconds
+Total execution time: 439.660877 seconds
+Running with value: 0.0009765625
+done

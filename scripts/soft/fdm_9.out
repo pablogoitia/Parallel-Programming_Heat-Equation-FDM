@@ -1,0 +1,24 @@
+[prun] Master compute host = n16-80
+[prun] Resource manager = slurm
+[prun] Launch cmd = mpirun ./fdm_mpi 0.007511717 (family=openmpi4)
+I am process 1 of 9. points_per_slice=15 of 133. first_point=0, last_point=14
+I am process 2 of 9. points_per_slice=15 of 133. first_point=16, last_point=30
+I am process 3 of 9. points_per_slice=15 of 133. first_point=32, last_point=46
+I am process 4 of 9. points_per_slice=15 of 133. first_point=48, last_point=62
+I am process 5 of 9. points_per_slice=15 of 133. first_point=64, last_point=78
+I am process 9 of 9. points_per_slice=14 of 133. first_point=119, last_point=132
+I am process 6 of 9. points_per_slice=15 of 133. first_point=80, last_point=94
+I am process 7 of 9. points_per_slice=15 of 133. first_point=96, last_point=110
+I am process 8 of 9. points_per_slice=14 of 133. first_point=105, last_point=118
+Done! in 95 steps
+Execution time: 0.450365 seconds
+Main execution time: 3.445933 seconds
+Main execution time: 3.371311 seconds
+Main execution time: 3.371206 seconds
+Main execution time: 3.371438 seconds
+Main execution time: 3.371324 seconds
+Main execution time: 3.405407 seconds
+Main execution time: 3.405291 seconds
+Main execution time: 3.405247 seconds
+Main execution time: 3.405248 seconds
+done

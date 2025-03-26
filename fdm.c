@@ -28,7 +28,7 @@ typedef struct _node
 } node;
 
 static node nodes[TYPES_OF_NODES] = {
-	{"n16-8", 4, 6, 4.8}, // Fast nodes
+	{"n16-8", 4, 4, 4.8}, // Fast nodes
 	{"n16-9", 4, 4, 3.4}  // Slower nodes
 };
 

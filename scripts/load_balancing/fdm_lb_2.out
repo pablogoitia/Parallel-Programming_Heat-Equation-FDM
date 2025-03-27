@@ -1,0 +1,15 @@
+[prun] Master compute host = n16-80
+[prun] Resource manager = slurm
+[prun] Launch cmd = mpirun ./fdm_lb 0.001953125 (family=openmpi4)
+I am process 1 of 8 in n16-8. points_per_slice=75 of 512. first_point=0, last_point=74
+I am process 6 of 8 in n16-9. points_per_slice=53 of 512. first_point=353, last_point=405
+I am process 7 of 8 in n16-9. points_per_slice=53 of 512. first_point=406, last_point=458
+I am process 8 of 8 in n16-9. points_per_slice=53 of 512. first_point=459, last_point=511
+I am process 5 of 8 in n16-9. points_per_slice=53 of 512. first_point=300, last_point=352
+I am process 3 of 8 in n16-8. points_per_slice=75 of 512. first_point=150, last_point=224
+I am process 2 of 8 in n16-8. points_per_slice=75 of 512. first_point=75, last_point=149
+I am process 4 of 8 in n16-8. points_per_slice=75 of 512. first_point=225, last_point=299
+Done! in 71 steps
+Parallelized region execution time: 97.626313 seconds
+Main execution time: 102.577418 seconds
+done
